@@ -3,13 +3,14 @@ use crate::error::AppError;
 use crate::handlers::iplist::{
     get_all_continents, get_all_countries, get_by_asn, get_by_location, status,
 };
-use crate::iplist::iprange::{IpAsnRange, IpLocationRange, IpRanges, Location};
+use crate::iplist::iprange::{IpAsnRange, IpLocationRange, IpRanges, Location, generate_ranges};
 use axum::Router;
 use axum::routing::get;
 use clap::Parser;
-use log::{debug, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -40,6 +41,16 @@ pub struct AppState {
     pub ip_ranges: RwLock<IpRanges>,
 }
 
+impl AppState {
+    pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
+        let ip_ranges = generate_ranges(&config.geo).await?;
+        Ok(Arc::new(Self {
+            config,
+            ip_ranges: RwLock::new(ip_ranges),
+        }))
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
@@ -58,17 +69,33 @@ async fn main() -> Result<(), AppError> {
         .with_env_filter(env)
         .init();
 
-    let locations = Location::load(&config.geo)?;
-    let location_ranges = IpLocationRange::parse(&config.geo, &locations).await?;
-    let asn_ranges = IpAsnRange::parse(&config.geo).await?;
-    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
-    ip_ranges.location_ranges.save(&config.geo).await?;
-    let ip_ranges = RwLock::new(ip_ranges);
+    let state = AppState::new(config.clone()).await?;
 
-    let state = Arc::new(AppState {
-        config: config.clone(),
-        ip_ranges,
-    });
+    let scheduler = JobScheduler::new().await?;
+    let config_local = config.geo.clone();
+    let state_local = state.clone();
+    scheduler
+        .add(Job::new_async(
+            &config.geo.download_cron,
+            move |_uuid, _lock| {
+                let config_local = config_local.clone();
+                let state_local = state_local.clone();
+                Box::pin(async move {
+                    info!("Running periodic task");
+                    match generate_ranges(&config_local.clone()).await {
+                        Ok(ranges) => {
+                            *state_local.ip_ranges.write().await = ranges;
+                        }
+                        Err(e) => {
+                            error!("Failed to generate ranges: {}", e);
+                        }
+                    };
+                })
+            },
+        )?)
+        .await?;
+
+    scheduler.start().await?;
 
     let app = Router::new()
         .fallback_service(ServeDir::new("./frontend/dist"))

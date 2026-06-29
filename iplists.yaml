@@ -5,3 +5,4 @@ geo:
    asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz
    location_path: static/lists/location.csv
    output_folder: static/lists
+   download_cron: "0 * * * * *"

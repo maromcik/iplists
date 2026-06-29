@@ -294,3 +294,12 @@ impl IpRanges {
         })
     }
 }
+
+pub async fn generate_ranges(config: &GeoConfig) -> Result<IpRanges, AppError> {
+    let locations = Location::load(config)?;
+    let location_ranges = IpLocationRange::parse(config, &locations).await?;
+    let asn_ranges = IpAsnRange::parse(config).await?;
+    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
+    ip_ranges.location_ranges.save(&config).await?;
+    Ok(ip_ranges)
+}

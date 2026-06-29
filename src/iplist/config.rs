@@ -16,4 +16,5 @@ pub struct GeoConfig {
     pub headers: HashMap<String, String>,
     pub location_path: String,
     pub output_folder: String,
+    pub download_cron: String,
 }

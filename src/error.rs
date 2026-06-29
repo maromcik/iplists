@@ -44,6 +44,8 @@ pub enum AppError {
     FmtError(String),
     #[error("Datetime error: {0}")]
     DatetimeError(String),
+    #[error("Scheduler error: {0}")]
+    SchedulerError(String),
 }
 
 impl Debug for AppError {
@@ -126,6 +128,12 @@ impl From<csv::Error> for AppError {
 impl From<time::error::IndeterminateOffset> for AppError {
     fn from(e: time::error::IndeterminateOffset) -> Self {
         AppError::DatetimeError(e.to_string())
+    }
+}
+
+impl From<tokio_cron_scheduler::JobSchedulerError> for AppError {
+    fn from(e: tokio_cron_scheduler::JobSchedulerError) -> Self {
+        AppError::SchedulerError(e.to_string())
     }
 }
 

@@ -9,10 +9,6 @@ fn default_info() -> String {
     String::from("info")
 }
 
-fn default_true() -> Option<bool> {
-    Some(true)
-}
-
 fn default_static_files() -> String {
     String::from("static")
 }
