@@ -7,6 +7,7 @@ use std::{
 use flate2::read::GzDecoder;
 use log::info;
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
 
 use crate::error::AppError;
@@ -28,13 +29,19 @@ impl<'a> Downloader<'a> {
 
     pub async fn download(&self) -> Result<Saver, AppError> {
         let client = reqwest::Client::builder().timeout(self.timeout).build()?;
-        let mut req = client.get(self.uri);
+        let time = OffsetDateTime::now_local()?;
+        let uri = strfmt::strfmt!(self.uri,
+            year => format!("{:04}", time.year()),
+            month => format!("{:02}", u8::from(time.month())),
+            day => format!("{:02}", time.day()))?;
+        info!("downloading from: {}", uri);
+        let mut req = client.get(&uri);
         for (k, v) in self.headers {
             req = req.header(k, v);
         }
 
         let body = req.send().await?.bytes().await?.to_vec();
-        info!("data fetched from: {}", self.uri);
+        info!("data fetched from: {}", uri);
         Ok(Saver { body })
     }
 }

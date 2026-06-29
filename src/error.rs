@@ -40,6 +40,10 @@ pub enum AppError {
     ConfigError(String),
     #[error("Request error: {0}")]
     RequestError(String),
+    #[error("Format error: {0}")]
+    FmtError(String),
+    #[error("Datetime error: {0}")]
+    DatetimeError(String),
 }
 
 impl Debug for AppError {
@@ -107,9 +111,21 @@ impl From<reqwest::Error> for AppError {
     }
 }
 
+impl From<strfmt::FmtError> for AppError {
+    fn from(e: strfmt::FmtError) -> Self {
+        AppError::FmtError(e.to_string())
+    }
+}
+
 impl From<csv::Error> for AppError {
     fn from(value: csv::Error) -> Self {
         AppError::ParseError(value.to_string())
+    }
+}
+
+impl From<time::error::IndeterminateOffset> for AppError {
+    fn from(e: time::error::IndeterminateOffset) -> Self {
+        AppError::DatetimeError(e.to_string())
     }
 }
 
