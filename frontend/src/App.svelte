@@ -46,17 +46,15 @@
 <!-- MENNU BAR ON TOP -->
 <NavBar navItems={menu_items} bind:menu />
 
-<!-- PAGE LOADING -->
+<main class="bg-gray-50 dark:bg-gray-900 min-h-screen p-6 flex flex-col items-center">
 {#if menu === 1}
-	<div>
-		<container>
-			{#if !loggedin}
-				<h4>Requires Login</h4>
-			{:else}
-				<h4>Logged In as {$user}</h4>
-			{/if}
-			<p>ABOUT</p>
-		</container>
+	<div class="flex flex-col items-center text-center">
+		{#if !loggedin}
+			<h4 class="text-xl font-bold">Requires Login</h4>
+		{:else}
+			<h4 class="text-xl font-bold">Logged In as {$user}</h4>
+		{/if}
+		<p>ABOUT</p>
 	</div>
 {:else if menu === 2}
 	<LogIn />
@@ -73,15 +71,7 @@
 {:else if menu === 8}
 	<Continents />
 {:else}
-	<h2>Page Not Found or Completed Yet</h2>
+	<h2 class="text-2xl font-bold">Page Not Found or Completed Yet</h2>
 {/if}
+</main>
 
-<style>
-	div {
-		margin: 25px;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		text-align: center;
-	}
-</style>

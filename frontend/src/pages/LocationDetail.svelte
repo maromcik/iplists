@@ -15,10 +15,17 @@
     $: format, $activeLocation, fetchIps();
 </script>
 
-<h3>IPs for {$activeLocation} ({$locationType})</h3>
-<select bind:value={format}>
-    <option value="Json">JSON</option>
-    <option value="Text">Text</option>
-    <option value="Nftables">Nftables</option>
-</select>
-<pre>{ips}</pre>
+<div class="w-full max-w-4xl mx-auto p-4">
+    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">IPs for <span class="text-amber-600">{$activeLocation}</span> ({$locationType})</h3>
+
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>
+        <select bind:value={format} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+            <option value="Json">JSON</option>
+            <option value="Text">Text</option>
+            <option value="Nftables">Nftables</option>
+        </select>
+    </div>
+
+    <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
+</div>

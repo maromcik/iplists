@@ -7,9 +7,13 @@
     });
 </script>
 
-<h3>Continents</h3>
-<ul>
-    {#each continents as continent}
-        <li>{continent}</li>
-    {/each}
-</ul>
+<div class="w-full max-w-4xl mx-auto p-4">
+    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">Continents</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {#each continents as continent}
+            <div class="bg-cards p-6 rounded-xl shadow-sm text-gray-900 dark:text-gray-100 font-medium">
+                {continent}
+            </div>
+        {/each}
+    </div>
+</div>

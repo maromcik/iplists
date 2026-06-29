@@ -1,8 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    '../templates/**/*.html', // Adjust to your Minijinja templates directory
-    '../templates/**/*.jinja', // For `.jinja` files if used
+    './src/**/*.{html,js,svelte}',
+    '../templates/**/*.html',
+    '../templates/**/*.jinja',
   ],
   safelist: [
       'text-blue-500',
