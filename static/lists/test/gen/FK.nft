@@ -1,0 +1,81 @@
+set fk { 
+	type ipv4_addr
+	counter
+	flags interval
+	auto-merge
+	elements = {
+		62.208.72.0-62.208.72.255,
+		62.208.74.0-62.208.75.255,
+		63.130.248.0-63.130.248.255,
+		77.226.238.136-77.226.238.251,
+		80.73.208.0-80.73.218.255,
+		143.105.240.0-143.105.241.255,
+		172.226.183.96-172.226.183.255,
+		185.244.12.0-185.244.15.255,
+		190.106.57.240-190.106.57.255,
+		190.214.31.24-190.214.31.255,
+		195.59.130.0-195.59.132.255,
+		195.59.135.0-195.59.135.255,
+		195.248.193.0-195.248.193.255,
+	}
+}
+set fk6 { 
+	type ipv6_addr
+	counter
+	flags interval
+	auto-merge
+	elements = {
+		2001:470:ed70::-2001:470:ed70:ffff:ffff:ffff:ffff:ffff,
+		2001:470:f80a::-2001:470:f80a:ffff:ffff:ffff:ffff:ffff,
+		2001:4b28:c200::-2001:4b28:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2401:b60:1460::-2401:b60:146f:ffff:ffff:ffff:ffff:ffff,
+		2605:59c8:4c00::-2605:59c8:4cff:ffff:ffff:ffff:ffff:ffff,
+		2606:40:1350::-2606:40:136f:ffff:ffff:ffff:ffff:ffff,
+		2606:54c0:3180::-2606:54c0:3187:ffff:ffff:ffff:ffff:ffff,
+		2a01:528:c200::-2a01:528:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d41:c200::-2a04:1d41:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d42:c200::-2a04:1d42:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d43:c200::-2a04:1d43:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d44:c200::-2a04:1d44:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d45:c200::-2a04:1d45:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d46:c200::-2a04:1d46:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:1d47:c200::-2a04:1d47:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:21a::-2a04:4e41:21a:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:1332::-2a04:4e41:1332:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:1628::-2a04:4e41:1628:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:362a::-2a04:4e41:362a:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:4e17::-2a04:4e41:4e17:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:5e30::-2a04:4e41:5e30:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:7428::-2a04:4e41:7428:ffff:ffff:ffff:ffff:ffff,
+		2a04:4e41:7630::-2a04:4e41:7630:ffff:ffff:ffff:ffff:ffff,
+		2a05:dfc1:8c0e::-2a05:dfc1:8c0e:ffff:ffff:ffff:ffff:ffff,
+		2a07:d887:4700::-2a07:d887:47ff:ffff:ffff:ffff:ffff:ffff,
+		2a09:4c0:5300::-2a09:4c0:53ff:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac1:2600::-2a09:bac1:2600:0:ffff:ffff:ffff:ffff,
+		2a09:bac1:2620::-2a09:bac1:2620:0:ffff:ffff:ffff:ffff,
+		2a09:bac1:2640::-2a09:bac1:2640:0:ffff:ffff:ffff:ffff,
+		2a09:bac1:2660::-2a09:bac1:2660:0:ffff:ffff:ffff:ffff,
+		2a09:bac2:3180::-2a09:bac2:3187:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac3:3180::-2a09:bac3:3187:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac4:238::-2a09:bac4:23f:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac4:1238::-2a09:bac4:123f:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac5:31d8::-2a09:bac5:31df:ffff:ffff:ffff:ffff:ffff,
+		2a09:bac6:31d8::-2a09:bac6:31df:ffff:ffff:ffff:ffff:ffff,
+		2a0a:6040:f8d::-2a0a:6040:f8d:ffff:ffff:ffff:ffff:ffff,
+		2a0a:6044:7748::-2a0a:6044:7748:ffff:ffff:ffff:ffff:ffff,
+		2a0b:4e07:61::-2a0b:4e07:62:ffff:ffff:ffff:ffff:ffff,
+		2a0c:9a46:348::-2a0c:9a46:348:ffff:ffff:ffff:ffff:ffff,
+		2a0e:97c0:4b49::-2a0e:97c0:4b49:ffff:ffff:ffff:ffff:ffff,
+		2a0e:b107:2418::-2a0e:b107:241f:ffff:ffff:ffff:ffff:ffff,
+		2a0f:1cc5:1f8d::-2a0f:1cc5:1f8d:ffff:ffff:ffff:ffff:ffff,
+		2a12:ef87:9000::-2a12:ef87:9fff:ffff:ffff:ffff:ffff:ffff,
+		2a12:f381:c200::-2a12:f381:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a12:f382:c200::-2a12:f382:c2ff:ffff:ffff:ffff:ffff:ffff,
+		2a14:2d45:4700::-2a14:2d45:47ff:ffff:ffff:ffff:ffff:ffff,
+		2a14:67c2:818::-2a14:67c2:818:ffff:ffff:ffff:ffff:ffff,
+		2a14:7580:cf47::-2a14:7580:cf47:ffff:ffff:ffff:ffff:ffff,
+		2a14:7581:b83::-2a14:7581:b83:ffff:ffff:ffff:ffff:ffff,
+		2a14:7581:3b4f::-2a14:7581:3b4f:ffff:ffff:ffff:ffff:ffff,
+		2a14:7585:f306::-2a14:7585:f306:ffff:ffff:ffff:ffff:ffff,
+	}
+}

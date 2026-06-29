@@ -1,22 +1,14 @@
-use flate2::read::GzDecoder;
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::Duration;
-use std::{io::Cursor, net::IpAddr};
 use tokio::time::Instant;
 
+use crate::iplist::fetch::{Downloader, Loader};
 use crate::iplist::formatter::OutputFormat;
 use crate::{error::AppError, iplist::config::GeoConfig};
-
-// pub trait IpRangeTrait: Serialize + for<'de> Deserialize<'de> + Eq + PartialEq {
-//     type T: IpRangeTrait;
-
-//     fn download(config: &GeoConfig) -> impl Future<Output = Result<Self::T, AppError>>;
-// }
-//
 
 pub trait BaseIpRange {
     fn start(&self) -> IpAddr;
@@ -32,7 +24,23 @@ pub struct IpCountryRangeOnly {
 
 impl IpCountryRangeOnly {
     pub async fn download(config: &GeoConfig) -> Result<Vec<Self>, AppError> {
-        download::<Self>(&config.country_uri, config.timeout, &config.headers).await
+        let filename = "ip-location.csv.gz";
+        let parser = match Loader::new(&config.output_folder, filename).load().await {
+            Ok(parser) => parser,
+            Err(AppError::DataFileLoadError(e)) => {
+                warn!("re-downloading file; cause: {}", e);
+                Downloader::new(&config.country_uri, config.timeout, &config.headers)
+                    .download()
+                    .await?
+                    .save(&config.output_folder, filename)
+                    .await?
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        parser.parse().await
     }
 }
 
@@ -44,6 +52,15 @@ pub struct Location {
     pub country_alpha2: String,
     #[serde(rename = "region")]
     pub continent: String,
+}
+
+impl Location {
+    pub fn load(config: &GeoConfig) -> Result<Vec<Self>, AppError> {
+        let locations: Vec<Location> = csv::Reader::from_path(&config.location_path)?
+            .deserialize()
+            .collect::<Result<Vec<Location>, _>>()?;
+        Ok(locations)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -66,11 +83,12 @@ impl BaseIpRange for IpLocationRange {
 }
 
 impl IpLocationRange {
-    pub async fn parse(config: &GeoConfig) -> Result<Vec<Self>, AppError> {
+    pub async fn parse(
+        config: &GeoConfig,
+        locations: &Vec<Location>,
+    ) -> Result<Vec<Self>, AppError> {
         let ranges = IpCountryRangeOnly::download(config).await?;
-        let locations: Vec<Location> = csv::Reader::from_path(&config.location_path)?
-            .deserialize()
-            .collect::<Result<Vec<Location>, _>>()?;
+
         let t = Instant::now();
 
         info!("Parsing {} Location IP ranges", ranges.len());
@@ -120,9 +138,23 @@ impl BaseIpRange for IpAsnRange {
 
 impl IpAsnRange {
     pub async fn parse(config: &GeoConfig) -> Result<Vec<IpAsnRange>, AppError> {
-        let ranges = Vec::from_iter(
-            download::<Self>(&config.asn_uri, config.timeout, &config.headers).await?,
-        );
+        let filename = "ip-asn.csv.gz";
+        let parser = match Loader::new(&config.output_folder, filename).load().await {
+            Ok(parser) => parser,
+            Err(AppError::DataFileLoadError(e)) => {
+                warn!("re-downloading file; cause: {}", e);
+                Downloader::new(&config.asn_uri, config.timeout, &config.headers)
+                    .download()
+                    .await?
+                    .save(&config.output_folder, filename)
+                    .await?
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let ranges = parser.parse().await?;
 
         info!("Parsed {} ASN IP ranges", ranges.len(),);
 
@@ -139,8 +171,9 @@ pub struct IpLocationRanges {
 
 impl IpLocationRanges {
     pub async fn save(&self, config: &GeoConfig) -> Result<(), AppError> {
+        tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
         for (country, ranges) in &self.by_country {
-            let path = format!("{}/{}", config.output_folder, country);
+            let path = format!("{}/gen/{}", config.output_folder, country);
             tokio::fs::write(
                 format!("{path}.txt"),
                 OutputFormat::Text.format(ranges, Some(country)).to_string(),
@@ -156,7 +189,7 @@ impl IpLocationRanges {
         }
         info!("Country files saved");
         for (continent, ranges) in &self.by_continent {
-            let path = format!("{}/{}", config.output_folder, continent);
+            let path = format!("{}/gen/{}", config.output_folder, continent);
             tokio::fs::write(
                 format!("{path}.txt"),
                 OutputFormat::Text
@@ -180,11 +213,16 @@ impl IpLocationRanges {
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpRanges {
     pub location_ranges: IpLocationRanges,
-    pub asn_ranges: Vec<IpAsnRange>,
+    pub asn_ranges: Arc<Vec<IpAsnRange>>,
+    pub locations: Arc<Vec<Location>>,
 }
 
 impl IpRanges {
-    pub fn new(location_ranges: Vec<IpLocationRange>, asn_ranges: Vec<IpAsnRange>) -> Self {
+    pub fn new(
+        location_ranges: Vec<IpLocationRange>,
+        asn_ranges: Vec<IpAsnRange>,
+        locations: Vec<Location>,
+    ) -> Self {
         let mut location_ranges_by_country: HashMap<String, Vec<IpLocationRange>> = HashMap::new();
         let mut location_ranges_by_continent: HashMap<String, Vec<IpLocationRange>> =
             HashMap::new();
@@ -210,7 +248,8 @@ impl IpRanges {
                     .map(|(k, v)| (k, Arc::new(v)))
                     .collect(),
             },
-            asn_ranges,
+            asn_ranges: Arc::new(asn_ranges),
+            locations: Arc::new(locations),
         }
     }
 
@@ -234,14 +273,14 @@ impl IpRanges {
         Ok(ranges.clone())
     }
 
-    pub async fn get_by_asn(&self, asn: &u32) -> Result<Vec<IpAsnRange>, AppError> {
+    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<Vec<IpAsnRange>>, AppError> {
         let ranges = self
             .asn_ranges
             .iter()
             .filter(|r| r.asn == *asn)
             .cloned()
             .collect::<Vec<_>>();
-        Ok(ranges)
+        Ok(Arc::new(ranges))
     }
 
     pub fn get_by_country_name(
@@ -254,32 +293,4 @@ impl IpRanges {
                 .contains(country_name_query.to_lowercase().as_str())
         })
     }
-}
-
-impl IpLocationRange {}
-
-pub async fn download<T: Serialize + for<'a> Deserialize<'a>>(
-    uri: &str,
-    timeout: Duration,
-    headers: &HashMap<String, String>,
-) -> Result<Vec<T>, AppError> {
-    let client = reqwest::Client::builder().timeout(timeout).build()?;
-    let mut req = client.get(uri);
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-
-    let body = req.send().await?.bytes().await?.to_vec();
-    let cursor = Cursor::new(body);
-    let decoder = GzDecoder::new(cursor);
-    let mut reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_reader(decoder);
-    let mut data = Vec::new();
-    for record in reader.deserialize() {
-        let range: T = record?;
-        data.push(range);
-    }
-    info!("data fetched from: {}", uri);
-    Ok(data)
 }

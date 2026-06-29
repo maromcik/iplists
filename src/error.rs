@@ -28,6 +28,8 @@ pub enum AppError {
     CookieError(String),
     #[error("File error: {0}")]
     FileError(String),
+    #[error("Data File load error: {0}")]
+    DataFileLoadError(String),
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
     #[error("Parse error: {0}")]

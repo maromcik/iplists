@@ -1,14 +1,17 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
-use crate::handlers::iplist::{add_ip, get_by_asn, get_by_country, status};
-use crate::iplist::iprange::{IpAsnRange, IpLocationRange, IpRanges};
+use crate::handlers::iplist::{
+    get_all_continents, get_all_countries, get_by_asn, get_by_location, status,
+};
+use crate::iplist::iprange::{IpAsnRange, IpLocationRange, IpRanges, Location};
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::get;
 use clap::Parser;
 use log::{debug, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 
 use tracing_subscriber::EnvFilter;
 
@@ -32,6 +35,11 @@ struct Cli {
     config: String,
 }
 
+pub struct AppState {
+    pub config: AppConfig,
+    pub ip_ranges: RwLock<IpRanges>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
@@ -50,18 +58,28 @@ async fn main() -> Result<(), AppError> {
         .with_env_filter(env)
         .init();
 
-    let location_ranges = IpLocationRange::parse(&config.geo).await?;
+    let locations = Location::load(&config.geo)?;
+    let location_ranges = IpLocationRange::parse(&config.geo, &locations).await?;
     let asn_ranges = IpAsnRange::parse(&config.geo).await?;
-    let ip_ranges = IpRanges::new(location_ranges, asn_ranges);
+    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(&config.geo).await?;
-    let ip_ranges = Arc::new(RwLock::new(ip_ranges));
+    let ip_ranges = RwLock::new(ip_ranges);
+
+    let state = Arc::new(AppState {
+        config: config.clone(),
+        ip_ranges,
+    });
+
     let app = Router::new()
+        .fallback_service(ServeDir::new("./frontend/dist"))
         .nest_service("/static", ServeDir::new("static"))
-        .route("/iplist/country", get(get_by_country))
+        .route("/iplist/country", get(get_all_countries))
+        .route("/iplist/continent", get(get_all_continents))
+        .route("/iplist/location", get(get_by_location))
         .route("/iplist/asn", get(get_by_asn))
         .route("/status", get(status))
-        // .with_state(config.clone())
-        .with_state(ip_ranges);
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     for hostname in config.hostnames {
         let listener = tokio::net::TcpListener::bind(hostname).await?;
