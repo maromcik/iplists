@@ -11,7 +11,7 @@
     });
 
     function selectContinent(continent) {
-        activeLocation.set(continent);
+        activeLocation.set({ region: continent });
         locationType.set("continent");
         changeMenu(6); // 6 is the ID for LocationDetail
     }
@@ -24,7 +24,7 @@
             <button 
                 class="bg-cards p-6 rounded-xl shadow-sm text-gray-900 dark:text-gray-100 font-medium hover:shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
                 on:click={() => selectContinent(continent)}>
-                {continent.region}
+                {continent}
             </button>
         {/each}
     </div>

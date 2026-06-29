@@ -4,12 +4,35 @@
 
     let ips = "";
     let format = "Json";
+    let copyButtonText = "Copy";
 
     async function fetchIps() {
         if (!$activeLocation || !$locationType) return;
         const locationValue = $locationType === 'country' ? $activeLocation.alpha2 : $activeLocation.region;
         const response = await fetch(`/iplist/location?${$locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
-        ips = await response.text();
+        
+        let text = await response.text();
+        
+        if (format === 'Json') {
+            try {
+                const parsed = JSON.parse(text);
+                const finalParsed = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
+                ips = JSON.stringify(finalParsed, null, 2);
+            } catch (e) {
+                ips = text;
+            }
+        } else {
+            ips = text;
+        }
+    }
+
+    function copyToClipboard() {
+        navigator.clipboard.writeText(ips).then(() => {
+            copyButtonText = "Copied!";
+            setTimeout(() => {
+                copyButtonText = "Copy";
+            }, 2000);
+        });
     }
 
     // Reactively fetch when format or location changes
@@ -28,5 +51,10 @@
         </select>
     </div>
 
-    <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
+    <div class="relative">
+        <button on:click={copyToClipboard} class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors">
+            {copyButtonText}
+        </button>
+        <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
+    </div>
 </div>
