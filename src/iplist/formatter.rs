@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use axum::{Json, response::IntoResponse};
-use serde::{Deserialize, Serialize};
-
 use crate::iplist::iprange::BaseIpRange;
+use axum::http::{header, HeaderValue};
+use axum::response::IntoResponse;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -86,7 +86,15 @@ impl IntoResponse for FormattedOutput {
     fn into_response(self) -> axum::response::Response {
         match self.format {
             OutputFormat::Text => self.output.into_response(),
-            OutputFormat::Json => Json(self.output).into_response(),
+            OutputFormat::Json => (
+                [(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                )],
+                self.output,
+            )
+                .into_response(),
+
             OutputFormat::Nftables => self.output.into_response(),
         }
     }

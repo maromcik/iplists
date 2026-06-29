@@ -1167,6 +1167,7 @@ version = "0.1.1"
 dependencies = [
  "askama",
  "axum",
+ "bytes",
  "clap",
  "config",
  "csv",
