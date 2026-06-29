@@ -7,7 +7,8 @@
 
     async function fetchIps() {
         if (!$activeLocation || !$locationType) return;
-        const response = await fetch(`/iplist/location?${$locationType}=${$activeLocation}&format=${format.toLowerCase()}`);
+        const locationValue = $locationType === 'country' ? $activeLocation.alpha2 : $activeLocation.region;
+        const response = await fetch(`/iplist/location?${$locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
         ips = await response.text();
     }
 
@@ -16,7 +17,7 @@
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
-    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">IPs for <span class="text-amber-600">{$activeLocation}</span> ({$locationType})</h3>
+    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">IPs for <span class="text-amber-600">{$locationType === 'country' ? $activeLocation.alpha2 : $activeLocation.region}</span> ({$locationType})</h3>
 
     <div class="mb-6">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>

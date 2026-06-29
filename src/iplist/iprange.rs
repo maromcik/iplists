@@ -48,9 +48,9 @@ impl IpCountryRangeOnly {
 pub struct Location {
     #[serde(rename = "name")]
     pub country_name: String,
-    #[serde(rename = "alpha-2")]
+    #[serde(rename(serialize = "alpha2", deserialize = "alpha-2"))]
     pub country_alpha2: String,
-    #[serde(rename = "region")]
+    #[serde(rename(serialize = "continent", deserialize = "region"))]
     pub continent: String,
 }
 

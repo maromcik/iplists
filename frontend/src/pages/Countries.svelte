@@ -26,7 +26,7 @@
             <button 
                 class="bg-cards text-gray-900 dark:text-gray-100 p-4 rounded-xl shadow-sm hover:shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
                 on:click={() => selectCountry(country)}>
-                {country}
+                {country.name} ({country.alpha2})
             </button>
         {/each}
     </div>

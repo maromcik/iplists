@@ -69,7 +69,7 @@
 {:else if menu === 7}
 	<Countries changeMenu={(id) => menu = id} />
 {:else if menu === 8}
-	<Continents />
+	<Continents changeMenu={(id) => menu = id} />
 {:else}
 	<h2 class="text-2xl font-bold">Page Not Found or Completed Yet</h2>
 {/if}
