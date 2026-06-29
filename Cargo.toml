@@ -1,0 +1,27 @@
+[package]
+name = "iplists"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.7"
+tokio = {version = "1.48.0", features = ["full"]}
+log = "0.4.29"
+thiserror = "2.0.17"
+ipnetwork = { version = "0.21.1", features = ["serde"]}
+serde = { version = "1.0.228", features = ["derive", "std", "rc"] }
+askama = "0.14.0"
+itertools = "0.14.0"
+clap = {version = "4.5.53", features = ["default", "derive", "env"]}
+dotenvy = "0.15.7"
+time = { version = "0.3.44", features = ["serde", "local-offset", "parsing", "formatting"] }
+tracing = { version = "0.1.43", features = ["async-await"]}
+tower = { version = "0.5.2", features = ["util"]}
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "local-time", "time"] }
+tower-http = { version = "0.6.7", features = ["fs", "trace"]}
+csv = "1.4.0"
+config = "0.15.25"
+reqwest = "0.13.4"
+flate2 = "1.1.9"
+futures = "0.3.32"
+serde_json = "1.0.150"
