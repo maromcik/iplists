@@ -6,6 +6,7 @@ use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use std::sync::Arc;
+use itertools::Itertools;
 
 pub async fn get_all_countries(
     State(state): State<Arc<AppState>>,
@@ -14,11 +15,8 @@ pub async fn get_all_countries(
         .ip_ranges
         .read()
         .await
-        .location_ranges
-        .by_country
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
+        .locations
+        .clone();
     Ok(Json(countries))
 }
 
@@ -29,10 +27,11 @@ pub async fn get_all_continents(
         .ip_ranges
         .read()
         .await
-        .location_ranges
-        .by_continent
-        .keys()
+        .locations
+        .iter()
         .cloned()
+        .unique_by(|l| l.continent.clone())
+        .map(|l| l.continent)
         .collect::<Vec<_>>();
     Ok(Json(continents))
 }
