@@ -4,4 +4,4 @@ geo:
    country_uri: https://download.db-ip.com/free/dbip-country-lite-2026-06.csv.gz
    asn_uri: https://download.db-ip.com/free/dbip-asn-lite-2026-06.csv.gz
    location_path: static/lists/location.csv
-   output_folder: static/lists/test
+   output_folder: static/lists
