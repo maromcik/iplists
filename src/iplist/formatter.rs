@@ -5,18 +5,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::iplist::iprange::BaseIpRange;
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
-    Text,
+    #[default]
     Json,
+    Text,
     Nftables,
-}
-
-impl Default for OutputFormat {
-    fn default() -> Self {
-        Self::Json
-    }
 }
 
 impl OutputFormat {
@@ -62,7 +57,7 @@ impl OutputFormat {
                 }
                 output.push_str("\t}\n}");
                 output6.push_str("\t}\n}");
-                output.push_str("\n");
+                output.push('\n');
                 output.push_str(output6.as_str());
                 FormattedOutput::new(output, OutputFormat::Nftables)
             }

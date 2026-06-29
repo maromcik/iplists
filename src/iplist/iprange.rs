@@ -8,7 +8,7 @@ use tokio::time::Instant;
 
 use crate::iplist::fetch::{Downloader, Loader};
 use crate::iplist::formatter::OutputFormat;
-use crate::{error::AppError, iplist::config::GeoConfig};
+use crate::{error::AppError, iplist::config::IplistConfig};
 
 pub trait BaseIpRange {
     fn start(&self) -> IpAddr;
@@ -23,7 +23,7 @@ pub struct IpCountryRangeOnly {
 }
 
 impl IpCountryRangeOnly {
-    pub async fn download(config: &GeoConfig) -> Result<Vec<Self>, AppError> {
+    pub async fn download(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
         let filename = "ip-location.csv.gz";
         let parser = match Loader::new(&config.output_folder, filename).load().await {
             Ok(parser) => parser,
@@ -55,7 +55,7 @@ pub struct Location {
 }
 
 impl Location {
-    pub fn load(config: &GeoConfig) -> Result<Vec<Self>, AppError> {
+    pub fn load(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
         let locations: Vec<Location> = csv::Reader::from_path(&config.location_path)?
             .deserialize()
             .collect::<Result<Vec<Location>, _>>()?;
@@ -84,7 +84,7 @@ impl BaseIpRange for IpLocationRange {
 
 impl IpLocationRange {
     pub async fn parse(
-        config: &GeoConfig,
+        config: &IplistConfig,
         locations: &Vec<Location>,
     ) -> Result<Vec<Self>, AppError> {
         let ranges = IpCountryRangeOnly::download(config).await?;
@@ -137,7 +137,7 @@ impl BaseIpRange for IpAsnRange {
 }
 
 impl IpAsnRange {
-    pub async fn parse(config: &GeoConfig) -> Result<Vec<IpAsnRange>, AppError> {
+    pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
         let filename = "ip-asn.csv.gz";
         let parser = match Loader::new(&config.output_folder, filename).load().await {
             Ok(parser) => parser,
@@ -170,7 +170,7 @@ pub struct IpLocationRanges {
 }
 
 impl IpLocationRanges {
-    pub async fn save(&self, config: &GeoConfig) -> Result<(), AppError> {
+    pub async fn save(&self, config: &IplistConfig) -> Result<(), AppError> {
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
         for (country, ranges) in &self.by_country {
             let path = format!("{}/gen/{}", config.output_folder, country);
@@ -295,11 +295,11 @@ impl IpRanges {
     }
 }
 
-pub async fn generate_ranges(config: &GeoConfig) -> Result<IpRanges, AppError> {
+pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
     let locations = Location::load(config)?;
     let location_ranges = IpLocationRange::parse(config, &locations).await?;
     let asn_ranges = IpAsnRange::parse(config).await?;
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
-    ip_ranges.location_ranges.save(&config).await?;
+    ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
 }

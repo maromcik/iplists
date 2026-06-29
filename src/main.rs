@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::handlers::iplist::{
     get_all_continents, get_all_countries, get_by_asn, get_by_location, status,
 };
-use crate::iplist::iprange::{IpAsnRange, IpLocationRange, IpRanges, Location, generate_ranges};
+use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::Router;
 use axum::routing::get;
 use clap::Parser;
@@ -43,7 +43,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
-        let ip_ranges = generate_ranges(&config.geo).await?;
+        let ip_ranges = generate_ranges(&config.iplist).await?;
         Ok(Arc::new(Self {
             config,
             ip_ranges: RwLock::new(ip_ranges),
@@ -72,11 +72,11 @@ async fn main() -> Result<(), AppError> {
     let state = AppState::new(config.clone()).await?;
 
     let scheduler = JobScheduler::new().await?;
-    let config_local = config.geo.clone();
+    let config_local = config.iplist.clone();
     let state_local = state.clone();
     scheduler
         .add(Job::new_async(
-            &config.geo.download_cron,
+            &config.iplist.download_cron,
             move |_uuid, _lock| {
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();

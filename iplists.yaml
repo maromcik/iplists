@@ -1,6 +1,6 @@
 app_log_level: debug
 all_log_level: info
-geo:
+iplist:
    country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
    asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz
    location_path: static/lists/location.csv

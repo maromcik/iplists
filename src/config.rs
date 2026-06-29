@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use config::Config;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::AppError, iplist::config::GeoConfig};
+use crate::{error::AppError, iplist::config::IplistConfig};
 
 fn default_info() -> String {
     String::from("info")
@@ -21,7 +21,7 @@ fn default_web_hostname() -> HashSet<String> {
 pub struct AppConfig {
     #[serde(default = "default_web_hostname")]
     pub hostnames: HashSet<String>,
-    pub geo: GeoConfig,
+    pub iplist: IplistConfig,
     #[serde(default = "default_info")]
     pub app_log_level: String,
     #[serde(default = "default_info")]

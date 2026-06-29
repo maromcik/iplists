@@ -7,7 +7,7 @@ fn default_timeout() -> std::time::Duration {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct GeoConfig {
+pub struct IplistConfig {
     pub country_uri: String,
     pub asn_uri: String,
     #[serde(default = "default_timeout")]
