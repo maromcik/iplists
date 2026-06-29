@@ -3,10 +3,13 @@
 	import { getSession } from "./js/auth.js";
 	import NavBar from "./component/Navbar.svelte";
 	import LogIn from "./pages/Login.svelte";
-	import LogOut from "./pages/Logout.svelte";
-	import Secure from "./pages/Secure.svelte";
-	import Apicheck from "./pages/Apicheck.svelte";
-	import { onMount } from "svelte";
+ import LogOut from "./pages/Logout.svelte";
+ import Secure from "./pages/Secure.svelte";
+ import Apicheck from "./pages/Apicheck.svelte";
+ import Countries from "./pages/Countries.svelte";
+ import Continents from "./pages/Continents.svelte";
+ import LocationDetail from "./pages/LocationDetail.svelte";
+ import { onMount } from "svelte";
 
 	let menu;
 	$: loggedin = $user !== "";
@@ -14,10 +17,13 @@
 	// check if logged in
 	onMount(getSession);
 
-	const set_menu_items = (loggedin) => {
+	const get_menu_items = (loggedin) => {
 		if (loggedin) {
 			return [
 				{ label: "About", id: 1 },
+				{ label: "Countries", id: 7 },
+				{ label: "Continents", id: 8 },
+				{ label: "Location", id: 6 },
 				{ label: "Secure", id: 3 },
 				{ label: "API Check", id: 5 },
 				{ label: "Logout", id: 4 },
@@ -25,15 +31,20 @@
 		} else {
 			return [
 				{ label: "About", id: 1 },
+				{ label: "Countries", id: 7 },
+				{ label: "Continents", id: 8 },
+				{ label: "Location", id: 6 },
 				{ label: "API Check", id: 5 },
 				{ label: "Login", id: 2 },
 			];
 		}
 	};
+
+	$: menu_items = get_menu_items(loggedin);
 </script>
 
 <!-- MENNU BAR ON TOP -->
-<NavBar navItems={set_menu_items(loggedin)} bind:menu />
+<NavBar navItems={menu_items} bind:menu />
 
 <!-- PAGE LOADING -->
 {#if menu === 1}
@@ -55,6 +66,12 @@
 	<LogOut />
 {:else if menu === 5}
 	<Apicheck />
+{:else if menu === 6}
+	<LocationDetail />
+{:else if menu === 7}
+	<Countries changeMenu={(id) => menu = id} />
+{:else if menu === 8}
+	<Continents />
 {:else}
 	<h2>Page Not Found or Completed Yet</h2>
 {/if}

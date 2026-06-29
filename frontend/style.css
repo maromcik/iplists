@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    h1 {
+        @apply text-4xl font-semibold mb-6;
+    }
+
+    h2 {
+        @apply text-3xl font-medium mb-5;
+    }
+
+    h3 {
+        @apply text-2xl font-medium mb-4;
+    }
+
+    h4 {
+        @apply text-xl font-medium mb-3;
+    }
+
+    h5 {
+        @apply text-lg font-medium mb-2;
+    }
+
+    h6 {
+        @apply text-base font-medium mb-1;
+    }
+
+    p {
+        @apply text-base leading-relaxed mb-4 text-justify;
+    }
+
+    a {
+        @apply text-amber-500 hover:text-amber-600 transition-colors;
+    }
+
+    ul {
+        @apply list-disc pl-6 mb-4;
+    }
+
+    ol {
+        @apply list-decimal pl-6 mb-4;
+    }
+
+    li {
+        @apply mb-2;
+    }
+
+    blockquote {
+        @apply border-l-4 border-gray-300 pl-4 italic text-gray-600 mb-4;
+    }
+
+    /* inline code */
+    p code, li code, span code {
+        @apply bg-gray-600 dark:bg-gray-300 text-sm px-1 py-0.5 rounded text-gray-100 dark:text-gray-800;
+    }
+
+    /* remove background from block code */
+    pre code {
+        @apply bg-transparent p-0 rounded-none text-inherit;
+    }
+}
+
+.image-container {
+    width: 100%; /* Set the width of the container */
+    max-width: 320px;
+    margin-left: 0;
+}
+
+.responsive-image {
+    width: 100%; /* Make the image fill the container */
+    height: 100%; /* Make the image fill the container */
+    object-fit: cover; /* Maintain aspect ratio and cover the container */
+}
+
+.custom-form {
+    max-width: 100%;
+    width: 100%;
+}
+
+.bg-panes {
+    @apply bg-stone-900;
+}
+
+.bg-page {
+    @apply bg-stone-800;
+}
+
+.bg-cards {
+    @apply bg-stone-700;
+}
+
+.bg-ui-hamburger {
+    @apply bg-stone-600;
+}
+
+.bg-navbar-buttons {
+    @apply bg-stone-100;
+}
+
+.bg-ui-components {
+    @apply bg-stone-700;
+}
+
+.bg-forms {
+    @apply bg-stone-400;
+}
+
+.bg-forms-fields {
+    @apply bg-stone-100;
+}
+
+.bg-acc {
+    @apply bg-amber-500;
+}
+
+.bg-acc-l {
+    @apply bg-amber-600;
+}
+
+.bg-acc-l:hover {
+    @apply bg-amber-700;
+}
+
+.bg-acc:hover {
+    @apply bg-amber-600;
+}
+
+.text-acc {
+    @apply text-amber-500;
+}
+
+.text-acc:hover {
+    @apply text-amber-600;
+}
+
+.text-acc-xl {
+    @apply text-amber-700;
+}
+
+.text-acc-xl:hover {
+    @apply text-amber-800;
+}
+
+.text-forms {
+    @apply text-gray-800
+}
+
+.text-forms-input {
+    @apply text-gray-800
+}
+
+.text-sat-m {
+    @apply text-gray-300
+}
+
+.text-sat-l {
+    @apply text-gray-200
+}
+
+.text-sat-xl {
+    @apply text-gray-100
+}
+
+.text-button {
+    @apply text-stone-900
+}
+
+.text-navbar-buttons {
+    @apply text-gray-100
+}
+
+.text-navbar-buttons:hover {
+    @apply text-amber-500
+}
+
+.border-base {
+    @apply border-stone-700
+}
+
+.border-base:hover {
+    @apply border-stone-200
+}
+
+.text-error {
+    @apply  text-red-800
+}
+
+.text-success {
+    @apply  text-green-800
+}
