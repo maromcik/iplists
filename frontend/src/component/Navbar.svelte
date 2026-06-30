@@ -83,7 +83,7 @@
         <a href={item.path}
            use:link
            on:click={toggleMenu}
-           class="flex items-center hover:text-amber-500 hover:scale-110 transition-transform">
+           class="flex items-center text-white hover:scale-110 transition-transform">
             {#if getIcon(item.label)}
                 <i class="{getIcon(item.label)} mr-2"></i>
             {/if}
