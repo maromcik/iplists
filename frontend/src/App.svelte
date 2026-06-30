@@ -3,11 +3,13 @@
 	import NavBar from "./component/Navbar.svelte";
 	import Countries from "./pages/Countries.svelte";
 	import Continents from "./pages/Continents.svelte";
+	import AsnDetail from "./pages/AsnDetail.svelte";
 	import LocationDetail from "./pages/LocationDetail.svelte";
 
 	const navItems = [
-		{ label: "Countries", path: "/countries" },
-		{ label: "Continents", path: "/continents" },
+		{ label: "Countries", 	path: "/countries" },
+		{ label: "Continents", 	path: "/continents" },
+		{ label: "ASNs", 		path: "/asn" },
 	];
 </script>
 
@@ -17,6 +19,7 @@
 	<Router>
 		<Route path="/countries" component={Countries} />
 		<Route path="/continents" component={Continents} />
+		<Route path="/asn" component={AsnDetail} />
 		<Route path="/location" component={LocationDetail} />
 		<Route path="/" component={Countries} />
 	</Router>

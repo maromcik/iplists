@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-use std::net::SocketAddr;
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::handlers::iplist::{
@@ -11,6 +9,8 @@ use axum::routing::get;
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use log::{debug, error, info};
+use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::lookup_host;
 use tokio::sync::RwLock;
@@ -20,6 +20,7 @@ use tower_http::trace::TraceLayer;
 
 use tracing_subscriber::EnvFilter;
 
+pub mod blocklist;
 pub mod config;
 pub mod error;
 pub mod forms;
@@ -103,8 +104,7 @@ async fn main() -> Result<(), AppError> {
 
     let app = Router::new()
         .fallback_service(
-            ServeDir::new("./frontend/dist")
-                .fallback(ServeFile::new("./frontend/dist/index.html")),
+            ServeDir::new("./frontend/dist").fallback(ServeFile::new("./frontend/dist/index.html")),
         )
         .nest_service("/static", ServeDir::new("static"))
         .route("/iplist/country", get(get_all_countries))
@@ -115,7 +115,9 @@ async fn main() -> Result<(), AppError> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    let tls_config = if let (Some(cert), Some(key)) = (config.tls_cert_path.as_ref(), config.tls_key_path.as_ref()) {
+    let tls_config = if let (Some(cert), Some(key)) =
+        (config.tls_cert_path.as_ref(), config.tls_key_path.as_ref())
+    {
         Some(RustlsConfig::from_pem_file(cert, key).await?)
     } else {
         None
@@ -138,9 +140,7 @@ async fn main() -> Result<(), AppError> {
     Ok(())
 }
 
-async fn lookup_hosts(
-    hostname_set: &HashSet<String>,
-) -> Result<Vec<SocketAddr>, AppError> {
+async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>, AppError> {
     let mut hostnames = Vec::default();
     for hostname in hostname_set {
         hostnames.extend(lookup_host(hostname).await?)

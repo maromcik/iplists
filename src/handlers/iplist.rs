@@ -5,18 +5,13 @@ use crate::forms::iplist::{IpListFormByAsn, IpListFormByCountry};
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use std::sync::Arc;
 use itertools::Itertools;
+use std::sync::Arc;
 
 pub async fn get_all_countries(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let countries = state
-        .ip_ranges
-        .read()
-        .await
-        .locations
-        .clone();
+    let countries = state.ip_ranges.read().await.locations.clone();
     Ok(Json(countries))
 }
 

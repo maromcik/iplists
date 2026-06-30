@@ -24,6 +24,7 @@
   function getIcon(label: string) {
       if (label === 'Countries') return 'fas fa-flag';
       if (label === 'Continents') return 'fas fa-globe';
+      if (label === 'ASNs') return 'fas fa-network-wired';
       return '';
   }
 </script>
