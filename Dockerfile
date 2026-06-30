@@ -1,23 +1,3 @@
-# ---------- Frontend ----------
-FROM node:22-bookworm-slim AS frontend-builder
-
-WORKDIR /usr/src/app/frontend
-
-COPY ./frontend/package*.json ./
-RUN npm ci
-
-COPY ./frontend ./
-
-# Build Svelte
-RUN npm run build
-
-# Build Tailwind CSS
-RUN npx tailwindcss \
-    -i style.css \
-    -o ../static/css/output.css \
-    --minify
-
-
 # ---------- Rust ----------
 FROM rust:1.96-slim AS builder
 
@@ -36,6 +16,27 @@ COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
 
 RUN cargo build --release
+
+
+# ---------- Frontend ----------
+FROM node:22-bookworm-slim AS frontend-builder
+
+WORKDIR /usr/src/app
+
+COPY ./frontend/package*.json ./frontend/
+RUN cd frontend && npm ci
+
+COPY ./frontend ./frontend
+COPY ./static ./static
+
+# Build Svelte
+RUN cd frontend && npm run build
+
+# Build Tailwind CSS
+RUN cd frontend && npx tailwindcss \
+    -i style.css \
+    -o ../static/css/output.css \
+    --minify
 
 
 # ---------- Runtime ----------

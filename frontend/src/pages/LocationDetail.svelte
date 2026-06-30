@@ -96,6 +96,6 @@
         <button on:click={copyToClipboard} class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors">
             {copyButtonText}
         </button>
-        <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
+        <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips.length > 50000 ? ips.substring(0, 50000) + '\n\n... (Content truncated, please download the full file above)' : ips}</pre>
     </div>
 </div>
