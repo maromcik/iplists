@@ -1,74 +1,80 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { link } from 'svelte-routing';
 
   type NavItem = { label: string, path: string };
   export let navItems: NavItem[] = [];
 
-  // Show mobile icon and display menu
-  let showMobileMenu = false;
-
-  // Mobile menu click event handler
-  const handleMobileIconClick = () => (showMobileMenu = !showMobileMenu);
-
-  // Media match query handler
-  const mediaQueryHandler = (e: MediaQueryListEvent) => {
-    // Reset mobile state
-    if (!e.matches) {
-      showMobileMenu = false;
-    }
-  };
-
-  // Menu selection
-  const handleMenuSelection = () => {
-    showMobileMenu = false;
-  };
-
-  function handleKeyDown(e: KeyboardEvent) {
-    if (e.keyCode === 13) {
-      handleMobileIconClick();
+  function toggleMenu() {
+    const menu = document.getElementById('phone-menu');
+    if (menu) {
+      menu.classList.toggle('hidden');
     }
   }
 
-  // Attach media query listener on mount hook
-  onMount(() => {
-    const mediaListener = window.matchMedia("(max-width: 767px)");
-    mediaListener.addEventListener("change", mediaQueryHandler);
-  });
+  // Close menu when clicking outside
+  function closeMenu(event: MouseEvent) {
+    const menu = document.getElementById('phone-menu');
+    const hamburger = document.getElementById('hamburger');
+    if (menu && hamburger && !menu.classList.contains('hidden') && 
+        !menu.contains(event.target as Node) && !hamburger.contains(event.target as Node)) {
+      menu.classList.add('hidden');
+    }
+  }
 </script>
 
-<nav class="bg-muni-blue h-[45px]">
-  <div class="max-w-[980px] mx-auto px-5 flex items-center h-full">
-    <!-- MUNI Logo -->
-    <a href="/" class="mr-4 flex-shrink-0">
-      <img src="/static/img/muni.png" alt="MUNI" class="h-16 object-contain" />
+<svelte:body on:click={closeMenu} />
+
+<div id="navbar"
+     class="bg-muni-blue p-2 sm:p-4 flex shadow-md fixed w-full z-10 top-0 h-16 sm:h-20 justify-between items-center">
+
+    <a id="navbar-image" href="/" class="flex items-center">
+        <h2 class="font-extrabold text-white text-lg sm:text-xl xl:text-2xl mr-4">
+            IP Lists
+        </h2>
+        <div class="border-l-2 border border-gray-300 h-6"></div>
+        <img src="/static/img/muni.png"
+             alt="Logo"
+             class="h-10 sm:h-12 lg:h-14 ml-4 object-contain"
+        >
     </a>
 
-    <!-- Mobile icon -->
-    <div
-      role="button"
-      tabindex=0
-      on:keydown={handleKeyDown}
-      on:click={handleMobileIconClick}
-      class={`relative w-[25px] h-[14px] cursor-pointer md:hidden ${showMobileMenu ? "active" : ""}`}
-    >
-      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "top-[6px] rotate-[-45deg]" : "top-0"}`} />
-      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "opacity-0" : "top-[6px]"}`} />
-      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "bottom-[6px] rotate-[45deg]" : "bottom-0"}`} />
+    <!-- Navigation Links Laptop View -->
+    <div id="laptop-menu" class="hidden lg:flex sm:ml-2 sm:mr-2 md:mr-4 md:ml-4 lg:items-center sm:space-x-3 md:space-x-6 lg:space-x-10 xl:space-x-16 xl:text-xl">
+        {#each navItems as item}
+        <a href={item.path}
+           use:link
+           class="flex items-center text-white hover:text-amber-500 hover:scale-110 cursor-pointer transition-transform">
+            {item.label}
+        </a>
+        {/each}
     </div>
 
-    <!-- Navbar List -->
-    <ul class={`absolute md:static md:flex md:w-auto md:bg-transparent ${showMobileMenu ? "block bg-muni-blue top-[45px] left-0 w-full p-4" : "hidden"}`}>
-      {#each navItems as item}
-        <li class="relative border-b border-gray-600 md:border-none">
-          <a
-            use:link
-            href={item.path}
-            on:click={handleMenuSelection}
-            class="text-sat-xl flex items-center px-4 hover:text-amber-500 transition-colors"
-          >{item.label}</a>
-        </li>
-      {/each}
-    </ul>
-  </div>
-</nav>
+    <!-- Hamburger Menu Button -->
+    <div class="flex lg:hidden items-center">
+        <button
+                id="hamburger"
+                on:click={toggleMenu}
+                class="focus:outline-none"
+                aria-label="Toggle menu"
+                aria-expanded="false"
+        >
+            <div class="w-8 h-0.5 md:w-10 lg:w-12 md:h-1 m-2 bg-white"></div>
+            <div class="w-8 h-0.5 md:w-10 lg:w-12 md:h-1 m-2 bg-white"></div>
+            <div class="w-8 h-0.5 md:w-10 lg:w-12 md:h-1 m-2 bg-white"></div>
+        </button>
+    </div>
+</div>
+
+<!-- Navigation Links Mobile View -->
+<div id="phone-menu" class="fixed top-16 sm:top-20 left-0 w-full bg-muni-blue text-white text-2xl pt-4 sm:pt-8 lg:pt-10 pb-6 lg:hidden hidden z-20">
+    <div class="flex flex-col space-y-6 items-center">
+        {#each navItems as item}
+        <a href={item.path}
+           use:link
+           on:click={toggleMenu}
+           class="flex items-center hover:text-amber-500 hover:scale-110 transition-transform">
+            {item.label}
+        </a>
+        {/each}
+    </div>
+</div>
