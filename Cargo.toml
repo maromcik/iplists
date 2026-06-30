@@ -1,10 +1,11 @@
 [package]
 name = "iplists"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2024"
 
 [dependencies]
 axum = "0.8.7"
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 tokio = {version = "1.48.0", features = ["full"]}
 log = "0.4.29"
 thiserror = "2.0.17"

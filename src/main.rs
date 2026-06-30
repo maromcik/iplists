@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+use std::net::SocketAddr;
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::handlers::iplist::{
@@ -6,9 +8,11 @@ use crate::handlers::iplist::{
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::Router;
 use axum::routing::get;
+use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use log::{debug, error, info};
 use std::sync::Arc;
+use tokio::net::lookup_host;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::services::{ServeDir, ServeFile};
@@ -111,11 +115,35 @@ async fn main() -> Result<(), AppError> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    for hostname in config.hostnames {
-        let listener = tokio::net::TcpListener::bind(hostname).await?;
-        info!("listening on {}", listener.local_addr()?);
-        axum::serve(listener, app.clone()).await?;
+    let tls_config = if let (Some(cert), Some(key)) = (config.tls_cert_path.as_ref(), config.tls_key_path.as_ref()) {
+        Some(RustlsConfig::from_pem_file(cert, key).await?)
+    } else {
+        None
+    };
+    let hostnames = lookup_hosts(&config.hostnames).await?;
+    for hostname in hostnames {
+        if let Some(ref tls) = tls_config {
+            info!("listening with TLS on {}", hostname);
+            axum_server::bind_rustls(hostname, tls.clone())
+                .serve(app.clone().into_make_service())
+                .await?;
+        } else {
+            info!("listening on {}", hostname);
+            axum_server::bind(hostname)
+                .serve(app.clone().into_make_service())
+                .await?;
+        }
     }
 
     Ok(())
+}
+
+async fn lookup_hosts(
+    hostname_set: &HashSet<String>,
+) -> Result<Vec<SocketAddr>, AppError> {
+    let mut hostnames = Vec::default();
+    for hostname in hostname_set {
+        hostnames.extend(lookup_host(hostname).await?)
+    }
+    Ok(hostnames)
 }

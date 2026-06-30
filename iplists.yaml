@@ -1,5 +1,9 @@
 app_log_level: debug
 all_log_level: info
+#tls_cert_path: <path>/fullchain.pem
+#tls_key_path: <path>/privkey.pem
+#hostnames:
+#   - "localhost:443"
 iplist:
    country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
    asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz

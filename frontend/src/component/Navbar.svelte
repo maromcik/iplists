@@ -34,7 +34,7 @@
      class="bg-muni-blue p-2 sm:p-4 flex shadow-md fixed w-full z-10 top-0 h-16 sm:h-20 justify-between items-center">
 
     <a id="navbar-image" href="/" class="flex items-center">
-        <h2 class="font-extrabold text-white text-lg sm:text-xl xl:text-2xl mr-4">
+        <h2 class="font-extrabold text-white text-lg sm:text-xl xl:text-2xl mt-5 mr-4">
             IP Lists
         </h2>
         <div class="border-l-2 border border-gray-300 h-6"></div>

@@ -6,7 +6,6 @@ use std::env;
 use std::error::Error;
 use std::fmt::Debug;
 use std::num::ParseIntError;
-use std::str::ParseBoolError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -78,8 +77,14 @@ impl From<ParseIntError> for AppError {
     }
 }
 
-impl From<ParseBoolError> for AppError {
-    fn from(value: ParseBoolError) -> Self {
+impl From<std::str::ParseBoolError> for AppError {
+    fn from(value: std::str::ParseBoolError) -> Self {
+        Self::ParseError(value.to_string())
+    }
+}
+
+impl From<std::net::AddrParseError> for AppError {
+    fn from(value: std::net::AddrParseError) -> Self {
         Self::ParseError(value.to_string())
     }
 }
