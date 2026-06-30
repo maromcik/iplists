@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { link } from 'svelte-routing';
 
-  type NavItem = { label: string, id: number };
-  export let navItems: NavItem[] = [{ label: "logo", id: 0 }];
-  export let menu: number = 1;
+  type NavItem = { label: string, path: string };
+  export let navItems: NavItem[] = [];
 
   // Show mobile icon and display menu
   let showMobileMenu = false;
@@ -20,8 +20,7 @@
   };
 
   // Menu selection
-  const handleMenuSelection = (id: number) => {
-    menu = id;
+  const handleMenuSelection = () => {
     showMobileMenu = false;
   };
 
@@ -53,8 +52,9 @@
       {#each navItems as item}
         <li>
           <a
-            href="/"
-            on:click|preventDefault={() => handleMenuSelection(item.id)}
+            use:link
+            href={item.path}
+            on:click={handleMenuSelection}
             >{item.label}</a
           >
         </li>

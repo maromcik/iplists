@@ -11,7 +11,7 @@ use log::{debug, error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use tracing_subscriber::EnvFilter;
@@ -98,7 +98,10 @@ async fn main() -> Result<(), AppError> {
     scheduler.start().await?;
 
     let app = Router::new()
-        .fallback_service(ServeDir::new("./frontend/dist"))
+        .fallback_service(
+            ServeDir::new("./frontend/dist")
+                .fallback(ServeFile::new("./frontend/dist/index.html")),
+        )
         .nest_service("/static", ServeDir::new("static"))
         .route("/iplist/country", get(get_all_countries))
         .route("/iplist/continent", get(get_all_continents))

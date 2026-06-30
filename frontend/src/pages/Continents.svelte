@@ -1,9 +1,8 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { navigate } from 'svelte-routing';
     import { activeLocation, locationType } from "../js/store";
     
-    export let changeMenu: (id: number) => void;
-
     let continents: string[] = [];
     onMount(async () => {
         const response = await fetch("/iplist/continent");
@@ -13,7 +12,7 @@
     function selectContinent(continent: string) {
         activeLocation.set({ region: continent });
         locationType.set("continent");
-        changeMenu(6); // 6 is the ID for LocationDetail
+        navigate('/location');
     }
 </script>
 
