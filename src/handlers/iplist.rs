@@ -35,19 +35,22 @@ pub async fn get_by_location(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<IpListFormByCountry>,
 ) -> Result<impl IntoResponse, AppError> {
-    let ips = if let Some(continent) = &form.continent {
-        state
+    let formatted = if let Some(continent) = &form.continent {
+        let ips = state
             .ip_ranges
             .read()
             .await
             .get_by_continent(continent)
-            .await?
+            .await?;
+        form.format.format(&ips, form.continent.as_deref())
     } else if let Some(country) = &form.country {
-        state.ip_ranges.read().await.get_by_country(country).await?
+        let ips = state.ip_ranges.read().await.get_by_country(country).await?;
+        form.format.format(&ips, form.country.as_deref())
     } else {
-        state.ip_ranges.read().await.location_ranges.all.clone()
+        let ips = state.ip_ranges.read().await.location_ranges.all.clone();
+        form.format.format(&ips, None)
     };
-    let formatted = form.format.format(&ips, form.country.as_deref());
+
     Ok(formatted)
 }
 
@@ -62,6 +65,6 @@ pub async fn get_by_asn(
     };
     let formatted = form
         .format
-        .format(&ips, form.asn.map(|asn| asn.to_string()).as_deref());
+        .format(&ips, form.asn.map(|asn| format!("asn{}", asn.to_string())).as_deref());
     Ok(formatted)
 }

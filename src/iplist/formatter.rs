@@ -36,14 +36,14 @@ impl OutputFormat {
                 let mut output6 = String::new();
                 output.push_str(
                     format!(
-                        "set {} {{ \n\ttype ipv4_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
+                        "set {}_ipv4 {{ \n\ttype ipv4_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
                 );
                 output6.push_str(
                     format!(
-                        "set {}6 {{ \n\ttype ipv6_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
+                        "set {}_ipv6 {{ \n\ttype ipv6_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
