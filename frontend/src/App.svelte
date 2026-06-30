@@ -8,7 +8,6 @@
 	const navItems = [
 		{ label: "Countries", path: "/countries" },
 		{ label: "Continents", path: "/continents" },
-		{ label: "Location", path: "/location" },
 	];
 </script>
 

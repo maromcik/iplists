@@ -37,162 +37,38 @@
   });
 </script>
 
-<nav>
-  <div class="inner">
+<nav class="bg-muni-blue h-[45px]">
+  <div class="max-w-[980px] mx-auto px-5 flex items-center h-full">
+    <!-- MUNI Logo -->
+    <a href="/" class="mr-4 flex-shrink-0">
+      <img src="/static/img/muni.png" alt="MUNI" class="h-16 object-contain" />
+    </a>
+
+    <!-- Mobile icon -->
     <div
       role="button"
       tabindex=0
       on:keydown={handleKeyDown}
       on:click={handleMobileIconClick}
-      class={`mobile-icon${showMobileMenu ? " active" : ""}`}
+      class={`relative w-[25px] h-[14px] cursor-pointer md:hidden ${showMobileMenu ? "active" : ""}`}
     >
-      <div class="middle-line" />
+      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "top-[6px] rotate-[-45deg]" : "top-0"}`} />
+      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "opacity-0" : "top-[6px]"}`} />
+      <div class={`absolute w-full h-[2px] bg-white transition-all origin-center ${showMobileMenu ? "bottom-[6px] rotate-[45deg]" : "bottom-0"}`} />
     </div>
-    <ul class={`navbar-list${showMobileMenu ? " mobile" : ""}`}>
+
+    <!-- Navbar List -->
+    <ul class={`absolute md:static md:flex md:w-auto md:bg-transparent ${showMobileMenu ? "block bg-muni-blue top-[45px] left-0 w-full p-4" : "hidden"}`}>
       {#each navItems as item}
-        <li>
+        <li class="relative border-b border-gray-600 md:border-none">
           <a
             use:link
             href={item.path}
             on:click={handleMenuSelection}
-            >{item.label}</a
-          >
+            class="text-sat-xl flex items-center px-4 hover:text-amber-500 transition-colors"
+          >{item.label}</a>
         </li>
       {/each}
     </ul>
   </div>
 </nav>
-
-<style>
-  nav {
-    background-color: rgba(0, 0, 0, 0.8);
-    height: 45px;
-  }
-
-  .inner {
-    max-width: 980px;
-    padding-left: 20px;
-    padding-right: 20px;
-    margin: auto;
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    height: 100%;
-  }
-
-  .mobile-icon {
-    width: 25px;
-    height: 14px;
-    position: relative;
-    cursor: pointer;
-  }
-
-  .mobile-icon:after,
-  .mobile-icon:before,
-  .middle-line {
-    content: "";
-    position: absolute;
-    width: 100%;
-    height: 2px;
-    background-color: #fff;
-    transition: all 0.4s;
-    transform-origin: center;
-  }
-
-  .mobile-icon:before,
-  .middle-line {
-    top: 0;
-  }
-
-  .mobile-icon:after,
-  .middle-line {
-    bottom: 0;
-  }
-
-  .mobile-icon:before {
-    width: 66%;
-  }
-
-  .mobile-icon:after {
-    width: 33%;
-  }
-
-  .middle-line {
-    margin: auto;
-  }
-
-  .mobile-icon:hover:before,
-  .mobile-icon:hover:after,
-  .mobile-icon.active:before,
-  .mobile-icon.active:after,
-  .mobile-icon.active .middle-line {
-    width: 100%;
-  }
-
-  .mobile-icon.active:before,
-  .mobile-icon.active:after {
-    top: 50%;
-    transform: rotate(-45deg);
-  }
-
-  .mobile-icon.active .middle-line {
-    transform: rotate(45deg);
-  }
-
-  .navbar-list {
-    display: none;
-    width: 100%;
-    justify-content: space-between;
-    margin: 0;
-    padding: 0 40px;
-  }
-
-  .navbar-list.mobile {
-    background-color: rgba(0, 0, 0, 0.8);
-    position: fixed;
-    display: block;
-    height: calc(100% - 45px);
-    bottom: 0;
-    left: 0;
-  }
-
-  .navbar-list li {
-    list-style-type: none;
-    position: relative;
-  }
-
-  .navbar-list li:before {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    background-color: #424245;
-  }
-
-  .navbar-list a {
-    color: #fff;
-    text-decoration: none;
-    display: flex;
-    height: 45px;
-    align-items: center;
-    padding: 0 10px;
-    font-size: 13px;
-  }
-
-  @media only screen and (min-width: 767px) {
-    .mobile-icon {
-      display: none;
-    }
-
-    .navbar-list {
-      display: flex;
-      padding: 0;
-    }
-
-    .navbar-list a {
-      display: inline-flex;
-    }
-  }
-</style>

@@ -10,12 +10,9 @@ module.exports = {
   ],
   theme: {
     extend: {
-      // colors: {
-      //   // italianGreen: '#064221ff',
-      //   // italianRed: '#901a1eff',
-      //   // navbarButtons: '#1f2937',
-      //   // navbarAccent: '#92400e',
-      // },
+      colors: {
+        'muni-blue': '#0000DC',
+      },
       fontFamily: {
         handwriting: ['"Pacifico"', 'cursive'],
       },
