@@ -1,14 +1,21 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
-    import { activeLocation, locationType } from "../js/store.js";
+    import { activeLocation, locationType } from "../js/store";
 
     let ips = "";
     let format = "Json";
     let copyButtonText = "Copy";
+    let formatId = "format-select";
 
     async function fetchIps() {
         if (!$activeLocation || !$locationType) return;
-        const locationValue = $locationType === 'country' ? $activeLocation.alpha2 : $activeLocation.region;
+        const loc = $activeLocation;
+        let locationValue: string;
+        if ('alpha2' in loc) {
+            locationValue = loc.alpha2;
+        } else {
+            locationValue = loc.region;
+        }
         const response = await fetch(`/iplist/location?${$locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
         
         let text = await response.text();
@@ -40,11 +47,11 @@
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
-    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">IPs for <span class="text-amber-600">{$locationType === 'country' ? $activeLocation.alpha2 : $activeLocation.region}</span> ({$locationType})</h3>
+    <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">IPs for <span class="text-amber-600">{$locationType === 'country' ? ($activeLocation && 'alpha2' in $activeLocation ? $activeLocation.alpha2 : '') : ($activeLocation && 'region' in $activeLocation ? $activeLocation.region : '')}</span> ({$locationType})</h3>
 
     <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>
-        <select bind:value={format} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+        <label for={formatId} class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>
+        <select id={formatId} bind:value={format} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
             <option value="Json">JSON</option>
             <option value="Text">Text</option>
             <option value="Nftables">Nftables</option>

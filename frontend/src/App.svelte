@@ -1,70 +1,30 @@
-<script>
-	import { user } from "./js/store.js";
-	import { getSession } from "./js/auth.js";
+<script lang="ts">
+	import { user } from "./js/store";
 	import NavBar from "./component/Navbar.svelte";
-	import LogIn from "./pages/Login.svelte";
- import LogOut from "./pages/Logout.svelte";
- import Secure from "./pages/Secure.svelte";
- import Apicheck from "./pages/Apicheck.svelte";
- import Countries from "./pages/Countries.svelte";
- import Continents from "./pages/Continents.svelte";
- import LocationDetail from "./pages/LocationDetail.svelte";
- import { onMount } from "svelte";
+	import Countries from "./pages/Countries.svelte";
+	import Continents from "./pages/Continents.svelte";
+	import LocationDetail from "./pages/LocationDetail.svelte";
 
-	let menu;
-	$: loggedin = $user !== "";
+	let menu: number;
 
-	// check if logged in
-	onMount(getSession);
+	type MenuItem = { label: string, id: number };
 
-	const get_menu_items = (loggedin) => {
-		if (loggedin) {
+	const get_menu_items = (): MenuItem[] => {
 			return [
-				{ label: "About", id: 1 },
 				{ label: "Countries", id: 7 },
 				{ label: "Continents", id: 8 },
 				{ label: "Location", id: 6 },
-				{ label: "Secure", id: 3 },
-				{ label: "API Check", id: 5 },
-				{ label: "Logout", id: 4 },
 			];
-		} else {
-			return [
-				{ label: "About", id: 1 },
-				{ label: "Countries", id: 7 },
-				{ label: "Continents", id: 8 },
-				{ label: "Location", id: 6 },
-				{ label: "API Check", id: 5 },
-				{ label: "Login", id: 2 },
-			];
-		}
 	};
 
-	$: menu_items = get_menu_items(loggedin);
+	$: menu_items = get_menu_items();
 </script>
 
 <!-- MENNU BAR ON TOP -->
 <NavBar navItems={menu_items} bind:menu />
 
 <main class="bg-gray-50 dark:bg-gray-900 min-h-screen p-6 flex flex-col items-center">
-{#if menu === 1}
-	<div class="flex flex-col items-center text-center">
-		{#if !loggedin}
-			<h4 class="text-xl font-bold">Requires Login</h4>
-		{:else}
-			<h4 class="text-xl font-bold">Logged In as {$user}</h4>
-		{/if}
-		<p>ABOUT</p>
-	</div>
-{:else if menu === 2}
-	<LogIn />
-{:else if menu === 3}
-	<Secure />
-{:else if menu === 4}
-	<LogOut />
-{:else if menu === 5}
-	<Apicheck />
-{:else if menu === 6}
+{#if menu === 6}
 	<LocationDetail />
 {:else if menu === 7}
 	<Countries changeMenu={(id) => menu = id} />

@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
   import { onMount } from "svelte";
 
-  export let navItems = [{ label: "logo", id: 0 }];
-  export let menu = 1;
+  type NavItem = { label: string, id: number };
+  export let navItems: NavItem[] = [{ label: "logo", id: 0 }];
+  export let menu: number = 1;
 
   // Show mobile icon and display menu
   let showMobileMenu = false;
@@ -11,7 +12,7 @@
   const handleMobileIconClick = () => (showMobileMenu = !showMobileMenu);
 
   // Media match query handler
-  const mediaQueryHandler = (e) => {
+  const mediaQueryHandler = (e: MediaQueryListEvent) => {
     // Reset mobile state
     if (!e.matches) {
       showMobileMenu = false;
@@ -19,12 +20,12 @@
   };
 
   // Menu selection
-  const handleMenuSelection = (id) => {
+  const handleMenuSelection = (id: number) => {
     menu = id;
     showMobileMenu = false;
   };
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: KeyboardEvent) {
     if (e.keyCode === 13) {
       handleMobileIconClick();
     }
@@ -33,7 +34,7 @@
   // Attach media query listener on mount hook
   onMount(() => {
     const mediaListener = window.matchMedia("(max-width: 767px)");
-    mediaListener.addListener(mediaQueryHandler);
+    mediaListener.addEventListener("change", mediaQueryHandler);
   });
 </script>
 

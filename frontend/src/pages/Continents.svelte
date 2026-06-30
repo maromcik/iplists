@@ -1,16 +1,16 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
-    import { activeLocation, locationType } from "../js/store.js";
+    import { activeLocation, locationType } from "../js/store";
     
-    export let changeMenu;
+    export let changeMenu: (id: number) => void;
 
-    let continents = [];
+    let continents: string[] = [];
     onMount(async () => {
         const response = await fetch("/iplist/continent");
         continents = await response.json();
     });
 
-    function selectContinent(continent) {
+    function selectContinent(continent: string) {
         activeLocation.set({ region: continent });
         locationType.set("continent");
         changeMenu(6); // 6 is the ID for LocationDetail

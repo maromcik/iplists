@@ -1,19 +1,20 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
-    import { activeLocation, locationType } from "../js/store.js";
+    import { activeLocation, locationType } from "../js/store";
+    import type { Location } from "../js/types";
     
     // We need to trigger a menu change or page change in App.svelte
     // Let's assume the caller passes a function to change the menu
-    export let changeMenu;
+    export let changeMenu: (id: number) => void;
 
-    let countries = [];
+    let countries: Location[] = [];
     onMount(async () => {
         const response = await fetch("/iplist/country");
         countries = await response.json();
     });
 
-    function selectCountry(country) {
-        activeLocation.set(country);
+    function selectCountry(country: Location) {
+        activeLocation.set({ alpha2: country.alpha2 });
         locationType.set("country");
         changeMenu(6); // 6 is the ID for LocationDetail
     }
