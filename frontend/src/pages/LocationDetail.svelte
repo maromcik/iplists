@@ -64,6 +64,7 @@
 
     // Reactively fetch when format changes
     $: format, fetchIps();
+    $: apiUrl = `${window.location.origin}/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`;
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
@@ -86,6 +87,21 @@
                     </button>
                 </div>
             {/each}
+        </div>
+    </div>
+
+    <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
+        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
+        <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
+            <a href={apiUrl} target="_blank" class="hover:underline flex-grow">
+                {apiUrl}
+            </a>
+            <button 
+                on:click={() => copyUrl(apiUrl)} 
+                class="text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
+            >
+                {copiedUrl === apiUrl ? "Copied!" : "Copy"}
+            </button>
         </div>
     </div>
 
