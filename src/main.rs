@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::handlers::iplist::{
-    get_all_continents, get_all_countries, get_by_asn, get_by_location, status,
+    get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::Router;
@@ -19,6 +19,8 @@ use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use tracing_subscriber::EnvFilter;
+use crate::blocklist::fetch::BlocklistRanges;
+use crate::handlers::blocklist::get_blocklist;
 
 pub mod blocklist;
 pub mod config;
@@ -44,14 +46,17 @@ struct Cli {
 pub struct AppState {
     pub config: AppConfig,
     pub ip_ranges: RwLock<IpRanges>,
+    pub blocklist_ranges: RwLock<BlocklistRanges>,
 }
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let ip_ranges = generate_ranges(&config.iplist).await?;
+        let blocklist_ranges = BlocklistRanges::download(&config.blocklist).await?;
         Ok(Arc::new(Self {
             config,
             ip_ranges: RwLock::new(ip_ranges),
+            blocklist_ranges: RwLock::new(blocklist_ranges),
         }))
     }
 }
@@ -86,7 +91,7 @@ async fn main() -> Result<(), AppError> {
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();
                 Box::pin(async move {
-                    info!("Running periodic task");
+                    info!("Scheduler:downloading iplists");
                     match generate_ranges(&config_local.clone()).await {
                         Ok(ranges) => {
                             *state_local.ip_ranges.write().await = ranges;
@@ -100,6 +105,29 @@ async fn main() -> Result<(), AppError> {
         )?)
         .await?;
 
+    let config_local = config.blocklist.clone();
+    let state_local = state.clone();
+    scheduler
+        .add(Job::new_async(
+            &config.blocklist.download_cron,
+            move |_uuid, _lock| {
+                let config_local = config_local.clone();
+                let state_local = state_local.clone();
+                Box::pin(async move {
+                    info!("Scheduler:downloading blocklist");
+                    match BlocklistRanges::download(&config_local.clone()).await {
+                        Ok(ranges) => {
+                            *state_local.blocklist_ranges.write().await = ranges;
+                        }
+                        Err(e) => {
+                            error!("Failed to download blocklist: {}", e);
+                        }
+                    };
+                })
+            },
+        )?)
+            .await?;
+
     scheduler.start().await?;
 
     let app = Router::new()
@@ -111,7 +139,7 @@ async fn main() -> Result<(), AppError> {
         .route("/iplist/continent", get(get_all_continents))
         .route("/iplist/location", get(get_by_location))
         .route("/iplist/asn", get(get_by_asn))
-        .route("/status", get(status))
+        .route("/blocklist", get(get_blocklist))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

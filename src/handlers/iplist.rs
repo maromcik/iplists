@@ -65,7 +65,3 @@ pub async fn get_by_asn(
         .format(&ips, form.asn.map(|asn| asn.to_string()).as_deref());
     Ok(formatted)
 }
-
-pub async fn status() -> Result<impl IntoResponse, AppError> {
-    Ok("ok")
-}

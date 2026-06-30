@@ -10,3 +10,10 @@ iplist:
    location_path: static/lists/location.csv
    output_folder: static/lists
    download_cron: "0 0 * * * *"
+blocklist:
+   ipv4_url: https://blocklist
+   ipv6_url: https://blocklist
+   headers:
+      Authorization: "Token xxxx"
+   timeout: 10
+   download_cron: "0 0 * * * *"

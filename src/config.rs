@@ -4,6 +4,7 @@ use config::Config;
 use serde::{Deserialize, Serialize};
 
 use crate::{error::AppError, iplist::config::IplistConfig};
+use crate::blocklist::config::BlocklistConfig;
 
 fn default_info() -> String {
     String::from("info")
@@ -22,6 +23,7 @@ pub struct AppConfig {
     #[serde(default = "default_web_hostname")]
     pub hostnames: HashSet<String>,
     pub iplist: IplistConfig,
+    pub blocklist: BlocklistConfig,
     #[serde(default = "default_info")]
     pub app_log_level: String,
     #[serde(default = "default_info")]
