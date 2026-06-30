@@ -30,6 +30,8 @@ pub struct AppConfig {
     pub static_files_path: String,
     pub tls_cert_path: Option<String>,
     pub tls_key_path: Option<String>,
+    #[serde(default)]
+    pub auth_token_file_path: Option<String>
 }
 
 impl AppConfig {

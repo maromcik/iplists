@@ -13,7 +13,7 @@
 
 <NavBar {navItems} />
 
-<main class="bg-gray-50 dark:bg-gray-900 min-h-screen p-6 flex flex-col items-center">
+<main class="bg-gray-50 dark:bg-gray-900 min-h-screen p-6 mt-12 flex flex-col items-center">
 	<Router>
 		<Route path="/countries" component={Countries} />
 		<Route path="/continents" component={Continents} />

@@ -67,7 +67,7 @@
         <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Static Lists:</h4>
         <div class="space-y-2">
             {#each [`txt`, `nft`] as ext}
-                {@const url = `http://localhost:8000/static/lists/gen/${locationValue}.${ext}`}
+                {@const url = `${window.location.origin}/static/lists/gen/${locationValue}.${ext}`}
                 <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
                     <a href={url} target="_blank" class="hover:underline flex-grow">
                         {url}
