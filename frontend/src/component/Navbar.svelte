@@ -25,6 +25,7 @@
       if (label === 'Countries') return 'fas fa-flag';
       if (label === 'Continents') return 'fas fa-globe';
       if (label === 'ASNs') return 'fas fa-network-wired';
+      if (label === 'Blocklist') return 'fas fa-ban';
       return '';
   }
 </script>

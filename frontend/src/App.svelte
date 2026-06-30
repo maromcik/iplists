@@ -4,12 +4,14 @@
 	import Countries from "./pages/Countries.svelte";
 	import Continents from "./pages/Continents.svelte";
 	import AsnDetail from "./pages/AsnDetail.svelte";
+	import Blocklist from "./pages/Blocklist.svelte";
 	import LocationDetail from "./pages/LocationDetail.svelte";
 
 	const navItems = [
 		{ label: "Countries", 	path: "/countries" },
 		{ label: "Continents", 	path: "/continents" },
 		{ label: "ASNs", 		path: "/asn" },
+		{ label: "Blocklist", 	path: "/blocklist" },
 	];
 </script>
 
@@ -20,6 +22,7 @@
 		<Route path="/countries" component={Countries} />
 		<Route path="/continents" component={Continents} />
 		<Route path="/asn" component={AsnDetail} />
+		<Route path="/blocklist" component={Blocklist} />
 		<Route path="/location" component={LocationDetail} />
 		<Route path="/" component={Countries} />
 	</Router>

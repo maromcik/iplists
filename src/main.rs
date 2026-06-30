@@ -139,7 +139,7 @@ async fn main() -> Result<(), AppError> {
         .route("/iplist/continent", get(get_all_continents))
         .route("/iplist/location", get(get_by_location))
         .route("/iplist/asn", get(get_by_asn))
-        .route("/blocklist", get(get_blocklist))
+        .route("/iplist/blocklist", get(get_blocklist))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
