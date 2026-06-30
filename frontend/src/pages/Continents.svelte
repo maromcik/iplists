@@ -4,7 +4,7 @@
     
     let continents: string[] = [];
     onMount(async () => {
-        const response = await fetch("/iplist/continent");
+        const response = await fetch("/api/iplist/continent");
         continents = await response.json();
     });
 

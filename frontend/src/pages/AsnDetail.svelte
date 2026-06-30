@@ -21,7 +21,7 @@
         if (!asn) return;
         
         // Construct API URL
-        const apiUrl = `/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`;
+        const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`;
         
         const response = await fetch(apiUrl);
         
@@ -95,7 +95,7 @@
     </div>
 
     {#if asn}
-        {@const url = `${window.location.origin}/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`}
+        {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`}
         <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
             <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">

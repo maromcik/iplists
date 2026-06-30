@@ -5,7 +5,7 @@
     
     let countries: Location[] = [];
     onMount(async () => {
-        const response = await fetch("/iplist/country");
+        const response = await fetch("/api/iplist/country");
         countries = await response.json();
     });
 

@@ -10,7 +10,7 @@
     let copiedUrl = "";
 
     async function fetchIps() {
-        let apiUrl = '/iplist/blocklist';
+        let apiUrl = '/api/blocklist';
         if (version) {
             apiUrl += `?version=${version}`;
         }
@@ -41,7 +41,7 @@
     }
 
     $: version, fetchIps();
-    $: apiUrl = version ? `${window.location.origin}/iplist/blocklist?version=${version}` : `${window.location.origin}/iplist/blocklist`;
+    $: apiUrl = version ? `${window.location.origin}/api/blocklist?version=${version}` : `${window.location.origin}/api/blocklist`;
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">

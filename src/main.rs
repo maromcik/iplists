@@ -135,11 +135,11 @@ async fn main() -> Result<(), AppError> {
             ServeDir::new("./frontend/dist").fallback(ServeFile::new("./frontend/dist/index.html")),
         )
         .nest_service("/static", ServeDir::new("static"))
-        .route("/iplist/country", get(get_all_countries))
-        .route("/iplist/continent", get(get_all_continents))
-        .route("/iplist/location", get(get_by_location))
-        .route("/iplist/asn", get(get_by_asn))
-        .route("/iplist/blocklist", get(get_blocklist))
+        .route("/api/iplist/country", get(get_all_countries))
+        .route("/api/iplist/continent", get(get_all_continents))
+        .route("/api/iplist/location", get(get_by_location))
+        .route("/api/iplist/asn", get(get_by_asn))
+        .route("/api/blocklist", get(get_blocklist))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

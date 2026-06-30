@@ -17,7 +17,7 @@
     async function fetchIps() {
         if (!locationValue || !locationType) return;
         
-        const response = await fetch(`/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
+        const response = await fetch(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
         
         let text = await response.text();
         
@@ -64,7 +64,7 @@
 
     // Reactively fetch when format changes
     $: format, fetchIps();
-    $: apiUrl = `${window.location.origin}/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`;
+    $: apiUrl = `${window.location.origin}/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`;
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
