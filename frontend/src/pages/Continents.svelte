@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { navigate } from 'svelte-routing';
-    import { activeLocation, locationType } from "../js/store";
     
     let continents: string[] = [];
     onMount(async () => {
@@ -10,9 +9,7 @@
     });
 
     function selectContinent(continent: string) {
-        activeLocation.set({ region: continent });
-        locationType.set("continent");
-        navigate('/location');
+        navigate(`/location?continent=${encodeURIComponent(continent)}&format=json`);
     }
 </script>
 

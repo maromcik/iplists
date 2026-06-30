@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { navigate } from 'svelte-routing';
-    import { activeLocation, locationType } from "../js/store";
     import type { Location } from "../js/types";
     
     let countries: Location[] = [];
@@ -11,9 +10,7 @@
     });
 
     function selectCountry(country: Location) {
-        activeLocation.set({ alpha2: country.alpha2 });
-        locationType.set("country");
-        navigate('/location');
+        navigate(`/location?country=${country.alpha2}&format=json`);
     }
 </script>
 
