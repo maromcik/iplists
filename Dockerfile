@@ -59,8 +59,6 @@ COPY --from=frontend-builder /usr/src/app/static/css/output.css ./static/css/out
 
 RUN mkdir -p /opt/iplists
 
-COPY iplists.yaml /opt/iplists/iplists.yaml
-
 VOLUME ["/opt/iplists"]
 
 CMD ["/usr/local/bin/iplists", "-c", "/opt/iplists/iplists.yaml"]

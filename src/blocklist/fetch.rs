@@ -2,7 +2,6 @@ use std::fmt::Display;
 use crate::blocklist::config::BlocklistConfig;
 use crate::error::AppError;
 use log::{info, warn};
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 use std::time::Duration;
 use ipnetwork::{Ipv4Network, Ipv6Network};
@@ -42,7 +41,7 @@ async fn fetch_blocklist(config: &BlocklistConfig, endpoint: &str) -> Result<Vec
 
     let body = req.send().await?.text().await?;
 
-    let blocklist = parse_from_string::<&str>(body.trim().as_ref(), config.split_string.as_deref());
+    let blocklist = parse_from_string::<&str>(body.trim(), config.split_string.as_deref());
 
     info!("blocklist fetched from: {endpoint}");
     Ok(blocklist)
