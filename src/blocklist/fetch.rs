@@ -1,11 +1,11 @@
-use std::fmt::Display;
 use crate::blocklist::config::BlocklistConfig;
+use crate::blocklist::network::ListNetwork;
 use crate::error::AppError;
+use ipnetwork::{Ipv4Network, Ipv6Network};
 use log::{info, warn};
+use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
-use ipnetwork::{Ipv4Network, Ipv6Network};
-use crate::blocklist::network::ListNetwork;
 
 pub struct BlocklistRanges {
     pub ipv4: Vec<Ipv4Network>,
@@ -19,14 +19,14 @@ impl BlocklistRanges {
 
         let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, true)?;
         let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, true)?;
-        Ok(BlocklistRanges {
-            ipv4,
-            ipv6,
-        })
+        Ok(BlocklistRanges { ipv4, ipv6 })
     }
 }
 
-async fn fetch_blocklist(config: &BlocklistConfig, endpoint: &str) -> Result<Vec<String>, AppError> {
+async fn fetch_blocklist(
+    config: &BlocklistConfig,
+    endpoint: &str,
+) -> Result<Vec<String>, AppError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(config.timeout))
         .build()?;
@@ -100,5 +100,8 @@ where
     <T as FromStr>::Err: Display,
     AppError: From<<T as FromStr>::Err>,
 {
-    ips.iter().map(|ip| ip.to_string()).collect::<Vec<String>>().join("\n")
+    ips.iter()
+        .map(|ip| ip.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
 }

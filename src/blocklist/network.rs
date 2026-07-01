@@ -1,6 +1,6 @@
+use crate::blocklist::iptrie::BitIp;
 use ipnetwork::{Ipv4Network, Ipv6Network};
 use std::fmt::Debug;
-use crate::blocklist::iptrie::BitIp;
 
 /// Trait that defines a generic abstraction for representing network-related operations on IPv4 and IPv6 subnets.
 /// This trait is implemented for `Ipv4Network` and `Ipv6Network`.

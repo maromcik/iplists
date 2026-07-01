@@ -65,6 +65,6 @@ pub async fn get_by_asn(
     };
     let formatted = form
         .format
-        .format(&ips, form.asn.map(|asn| format!("asn{}", asn.to_string())).as_deref());
+        .format(&ips, form.asn.map(|asn| format!("asn{}", asn)).as_deref());
     Ok(formatted)
 }

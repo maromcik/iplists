@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "iplists"
-version = "1.2.6"
+version = "1.2.7"
 dependencies = [
  "askama",
  "axum",

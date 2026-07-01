@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use config::Config;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::AppError, iplist::config::IplistConfig};
 use crate::blocklist::config::BlocklistConfig;
+use crate::{error::AppError, iplist::config::IplistConfig};
 
 fn default_info() -> String {
     String::from("info")

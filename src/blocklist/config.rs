@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BlocklistConfig {
@@ -8,5 +8,5 @@ pub struct BlocklistConfig {
     pub headers: Option<HashMap<String, String>>,
     pub split_string: Option<String>,
     pub timeout: u64,
-    pub download_cron: String
+    pub download_cron: String,
 }

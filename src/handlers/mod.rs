@@ -1,2 +1,2 @@
-pub mod iplist;
 pub mod blocklist;
+pub mod iplist;

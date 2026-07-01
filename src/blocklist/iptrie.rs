@@ -1,6 +1,5 @@
 use crate::blocklist::network::ListNetwork;
 
-
 /// Represents a generic IP address in either IPv4 or IPv6 format using numeric representations.
 pub enum BitIp {
     Ipv4(u32),

@@ -1,4 +1,4 @@
-pub mod fetch;
 pub mod config;
-pub mod network;
+pub mod fetch;
 pub mod iptrie;
+pub mod network;
