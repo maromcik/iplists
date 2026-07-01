@@ -61,7 +61,7 @@ pub async fn get_by_asn(
     let ips = if let Some(asn) = &form.asn {
         state.ip_ranges.read().await.get_by_asn(asn).await?
     } else {
-        state.ip_ranges.read().await.asn_ranges.clone()
+        state.ip_ranges.read().await.asn_ranges.all.clone()
     };
     let formatted = form
         .format

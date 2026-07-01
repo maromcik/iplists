@@ -163,6 +163,12 @@ impl IpAsnRange {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpAsnRanges {
+    pub all: Arc<Vec<IpAsnRange>>,
+    pub by_asn: HashMap<u32, Arc<Vec<IpAsnRange>>>,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRanges {
     pub all: Arc<Vec<IpLocationRange>>,
     pub by_country: HashMap<String, Arc<Vec<IpLocationRange>>>,
@@ -213,7 +219,7 @@ impl IpLocationRanges {
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpRanges {
     pub location_ranges: IpLocationRanges,
-    pub asn_ranges: Arc<Vec<IpAsnRange>>,
+    pub asn_ranges: IpAsnRanges,
     pub locations: Arc<Vec<Location>>,
 }
 
@@ -236,6 +242,15 @@ impl IpRanges {
                 .or_default()
                 .push(range.clone());
         }
+
+        let mut asn_ranges_by_asn: HashMap<u32, Vec<IpAsnRange>> = HashMap::new();
+        for range in &asn_ranges {
+            asn_ranges_by_asn
+                .entry(range.asn)
+                .or_default()
+                .push(range.clone());
+        }
+
         Self {
             location_ranges: IpLocationRanges {
                 all: Arc::new(location_ranges),
@@ -248,7 +263,13 @@ impl IpRanges {
                     .map(|(k, v)| (k, Arc::new(v)))
                     .collect(),
             },
-            asn_ranges: Arc::new(asn_ranges),
+            asn_ranges: IpAsnRanges {
+                all: Arc::new(asn_ranges),
+                by_asn: asn_ranges_by_asn
+                    .into_iter()
+                    .map(|(k, v)| (k, Arc::new(v)))
+                    .collect(),
+            },
             locations: Arc::new(locations),
         }
     }
@@ -274,13 +295,10 @@ impl IpRanges {
     }
 
     pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<Vec<IpAsnRange>>, AppError> {
-        let ranges = self
-            .asn_ranges
-            .iter()
-            .filter(|r| r.asn == *asn)
-            .cloned()
-            .collect::<Vec<_>>();
-        Ok(Arc::new(ranges))
+        let Some(ranges) = self.asn_ranges.by_asn.get(asn) else {
+            return Ok(Arc::new(vec![]));
+        };
+        Ok(ranges.clone())
     }
 
     pub fn get_by_country_name(
