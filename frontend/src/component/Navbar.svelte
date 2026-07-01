@@ -15,7 +15,7 @@
   function closeMenu(event: MouseEvent) {
     const menu = document.getElementById('phone-menu');
     const hamburger = document.getElementById('hamburger');
-    if (menu && hamburger && !menu.classList.contains('hidden') && 
+    if (menu && hamburger && !menu.classList.contains('hidden') &&
         !menu.contains(event.target as Node) && !hamburger.contains(event.target as Node)) {
       menu.classList.add('hidden');
     }
@@ -42,7 +42,7 @@
         <div class="border-l-2 border border-gray-300 h-6"></div>
         <img src="/static/img/muni.png"
              alt="Logo"
-             class="h-10 sm:h-12 lg:h-14 ml-4 object-contain"
+             class="h-10 sm:h-12 lg:h-14 ml-2 object-contain"
         >
     </a>
 
