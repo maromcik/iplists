@@ -16,13 +16,32 @@ pub trait BaseIpRange {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IpCountryRangeOnly {
+pub struct Location {
+    #[serde(rename = "name")]
+    pub country_name: String,
+    #[serde(rename(serialize = "alpha2", deserialize = "alpha-2"))]
+    pub country_alpha2: String,
+    #[serde(rename(serialize = "continent", deserialize = "region"))]
+    pub continent: String,
+}
+
+impl Location {
+    pub fn load(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
+        let locations: Vec<Location> = csv::Reader::from_path(&config.location_path)?
+            .deserialize()
+            .collect::<Result<Vec<Location>, _>>()?;
+        Ok(locations)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct IpLocationRangeOnly {
     pub start: IpAddr,
     pub end: IpAddr,
     pub country_alpha2: String,
 }
 
-impl IpCountryRangeOnly {
+impl IpLocationRangeOnly {
     pub async fn download(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
         let filename = "ip-location.csv.gz";
         let parser = match Loader::new(&config.output_folder, filename).load().await {
@@ -45,31 +64,10 @@ impl IpCountryRangeOnly {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Location {
-    #[serde(rename = "name")]
-    pub country_name: String,
-    #[serde(rename(serialize = "alpha2", deserialize = "alpha-2"))]
-    pub country_alpha2: String,
-    #[serde(rename(serialize = "continent", deserialize = "region"))]
-    pub continent: String,
-}
-
-impl Location {
-    pub fn load(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
-        let locations: Vec<Location> = csv::Reader::from_path(&config.location_path)?
-            .deserialize()
-            .collect::<Result<Vec<Location>, _>>()?;
-        Ok(locations)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IpLocationRange {
     pub start: IpAddr,
     pub end: IpAddr,
-    pub country_name: String,
-    pub country_alpha2: String,
-    pub continent: String,
+    pub location: Location,
 }
 
 impl BaseIpRange for IpLocationRange {
@@ -87,7 +85,7 @@ impl IpLocationRange {
         config: &IplistConfig,
         locations: &Vec<Location>,
     ) -> Result<Vec<Self>, AppError> {
-        let ranges = IpCountryRangeOnly::download(config).await?;
+        let ranges = IpLocationRangeOnly::download(config).await?;
 
         let t = Instant::now();
 
@@ -102,9 +100,7 @@ impl IpLocationRange {
                 parsed_ranges.push(IpLocationRange {
                     start: range.start,
                     end: range.end,
-                    country_name: location.country_name.clone(),
-                    country_alpha2: location.country_alpha2.clone(),
-                    continent: location.continent.clone(),
+                    location: (*location).to_owned(),
                 });
             }
         }
@@ -234,11 +230,11 @@ impl IpRanges {
             HashMap::new();
         for range in &location_ranges {
             location_ranges_by_country
-                .entry(range.country_alpha2.clone())
+                .entry(range.location.country_alpha2.clone())
                 .or_default()
                 .push(range.clone());
             location_ranges_by_continent
-                .entry(range.continent.clone())
+                .entry(range.location.continent.clone())
                 .or_default()
                 .push(range.clone());
         }
@@ -250,7 +246,11 @@ impl IpRanges {
                 .or_default()
                 .push(range.clone());
         }
-
+        info!(
+            "Loaded {} unique location ranges and {} unique ASN ranges",
+            location_ranges_by_country.len(),
+            asn_ranges_by_asn.len()
+        );
         Self {
             location_ranges: IpLocationRanges {
                 all: Arc::new(location_ranges),
@@ -306,7 +306,8 @@ impl IpRanges {
         country_name_query: &str,
     ) -> impl Iterator<Item = &IpLocationRange> {
         self.location_ranges.all.iter().filter(|r| {
-            r.country_name
+            r.location
+                .country_name
                 .to_lowercase()
                 .contains(country_name_query.to_lowercase().as_str())
         })
