@@ -1,8 +1,6 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
-use crate::handlers::iplist::{
-    get_all_continents, get_all_countries, get_by_asn, get_by_location,
-};
+use crate::handlers::iplist::{get_all_continents, get_all_countries, get_by_asn, get_by_location};
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::Router;
 use axum::routing::get;
@@ -18,9 +16,9 @@ use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
-use tracing_subscriber::EnvFilter;
 use crate::blocklist::fetch::BlocklistRanges;
 use crate::handlers::blocklist::get_blocklist;
+use tracing_subscriber::EnvFilter;
 
 pub mod blocklist;
 pub mod config;
@@ -80,55 +78,7 @@ async fn main() -> Result<(), AppError> {
         .init();
 
     let state = AppState::new(config.clone()).await?;
-
-    let scheduler = JobScheduler::new().await?;
-    let config_local = config.iplist.clone();
-    let state_local = state.clone();
-    scheduler
-        .add(Job::new_async(
-            &config.iplist.download_cron,
-            move |_uuid, _lock| {
-                let config_local = config_local.clone();
-                let state_local = state_local.clone();
-                Box::pin(async move {
-                    info!("Scheduler:downloading iplists");
-                    match generate_ranges(&config_local.clone()).await {
-                        Ok(ranges) => {
-                            *state_local.ip_ranges.write().await = ranges;
-                        }
-                        Err(e) => {
-                            error!("Failed to generate ranges: {}", e);
-                        }
-                    };
-                })
-            },
-        )?)
-        .await?;
-
-    let config_local = config.blocklist.clone();
-    let state_local = state.clone();
-    scheduler
-        .add(Job::new_async(
-            &config.blocklist.download_cron,
-            move |_uuid, _lock| {
-                let config_local = config_local.clone();
-                let state_local = state_local.clone();
-                Box::pin(async move {
-                    info!("Scheduler:downloading blocklist");
-                    match BlocklistRanges::download(&config_local.clone()).await {
-                        Ok(ranges) => {
-                            *state_local.blocklist_ranges.write().await = ranges;
-                        }
-                        Err(e) => {
-                            error!("Failed to download blocklist: {}", e);
-                        }
-                    };
-                })
-            },
-        )?)
-            .await?;
-
-    scheduler.start().await?;
+    schedule_tasks(state.clone(), &config).await?;
 
     let app = Router::new()
         .fallback_service(
@@ -174,4 +124,56 @@ async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>,
         hostnames.extend(lookup_host(hostname).await?)
     }
     Ok(hostnames)
+}
+
+async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), AppError> {
+    let scheduler = JobScheduler::new().await?;
+    let config_local = config.iplist.clone();
+    let state_local = state.clone();
+    scheduler
+        .add(Job::new_async(
+            &config.iplist.download_cron,
+            move |_uuid, _lock| {
+                let config_local = config_local.clone();
+                let state_local = state_local.clone();
+                Box::pin(async move {
+                    info!("Scheduler:downloading iplists");
+                    match generate_ranges(&config_local.clone()).await {
+                        Ok(ranges) => {
+                            *state_local.ip_ranges.write().await = ranges;
+                        }
+                        Err(e) => {
+                            error!("Failed to generate ranges: {}", e);
+                        }
+                    };
+                })
+            },
+        )?)
+        .await?;
+
+    let config_local = config.blocklist.clone();
+    let state_local = state.clone();
+    scheduler
+        .add(Job::new_async(
+            &config.blocklist.download_cron,
+            move |_uuid, _lock| {
+                let config_local = config_local.clone();
+                let state_local = state_local.clone();
+                Box::pin(async move {
+                    info!("Scheduler:downloading blocklist");
+                    match BlocklistRanges::download(&config_local.clone()).await {
+                        Ok(ranges) => {
+                            *state_local.blocklist_ranges.write().await = ranges;
+                        }
+                        Err(e) => {
+                            error!("Failed to download blocklist: {}", e);
+                        }
+                    };
+                })
+            },
+        )?)
+        .await?;
+
+    scheduler.start().await?;
+    Ok(())
 }

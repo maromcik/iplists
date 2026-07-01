@@ -1,6 +1,6 @@
 [package]
 name = "iplists"
-version = "1.2.5"
+version = "1.2.6"
 edition = "2024"
 
 [dependencies]
@@ -29,4 +29,3 @@ serde_json = "1.0.150"
 strfmt = "0.2.5"
 tokio-cron-scheduler = "0.15.1"
 bytes = "1.11.0"
-
