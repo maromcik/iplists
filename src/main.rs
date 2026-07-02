@@ -50,7 +50,8 @@ pub struct AppState {
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let ip_ranges = generate_ranges(&config.iplist).await?;
-        let blocklist_ranges = BlocklistRanges::download(&config.blocklist).await?;
+        let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
+
         Ok(Arc::new(Self {
             config,
             ip_ranges: RwLock::new(ip_ranges),
@@ -160,15 +161,10 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();
                 Box::pin(async move {
-                    info!("Scheduler:downloading blocklist");
-                    match BlocklistRanges::download(&config_local.clone()).await {
-                        Ok(ranges) => {
-                            *state_local.blocklist_ranges.write().await = ranges;
-                        }
-                        Err(e) => {
-                            error!("Failed to download blocklist: {}", e);
-                        }
-                    };
+                    info!("Scheduler: starting blocklist update");
+                    let merged = BlocklistRanges::merged_blocklist_ranges(&config_local).await;
+                    *state_local.blocklist_ranges.write().await = merged;
+                    info!("Scheduler: blocklist update completed");
                 })
             },
         )?)
