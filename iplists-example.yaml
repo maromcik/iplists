@@ -13,6 +13,8 @@ iplist:
 blocklist:
    ipv4_url: https://blocklist
    ipv6_url: https://blocklist
+   ipv4_folder: static/lists/ipv4
+   ipv6_folder: static/lists/ipv6
    headers:
       Authorization: "Token xxxx"
    timeout: 10
