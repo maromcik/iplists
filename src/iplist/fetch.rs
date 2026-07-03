@@ -5,7 +5,7 @@ use std::{
 };
 
 use flate2::read::GzDecoder;
-use log::info;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
@@ -34,14 +34,14 @@ impl<'a> Downloader<'a> {
             year => format!("{:04}", time.year()),
             month => format!("{:02}", u8::from(time.month())),
             day => format!("{:02}", time.day()))?;
-        info!("downloading from: {}", uri);
+        debug!("downloading from: {}", uri);
         let mut req = client.get(&uri);
         for (k, v) in self.headers {
             req = req.header(k, v);
         }
 
         let body = req.send().await?.bytes().await?.to_vec();
-        info!("data fetched from: {}", uri);
+        debug!("data fetched from: {}", uri);
         Ok(Saver { body })
     }
 }
@@ -76,11 +76,11 @@ impl Loader {
             > file_time
                 .checked_add(Duration::from_hours(24))
                 .ok_or(AppError::DataFileLoadError(
-                    "Could not increment time to compare downloaded file age".to_string(),
+                    "could not increment time to compare downloaded file age".to_string(),
                 ))?
         {
             return Err(AppError::DataFileLoadError(
-                "Downloaded file is older than 24 hours".to_string(),
+                "downloaded file is older than 24 hours".to_string(),
             ));
         }
         let body = tokio::fs::read(&path).await?;
@@ -120,7 +120,7 @@ impl Parser {
             let range: T = record?;
             data.push(range);
         }
-        info!("data parsed");
+        debug!("data parsed");
         Ok(data)
     }
 }

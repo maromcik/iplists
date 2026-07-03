@@ -2,10 +2,11 @@ use crate::blocklist::config::BlocklistConfig;
 use crate::blocklist::network::{ListNetwork, NetworkType};
 use crate::error::AppError;
 use ipnetwork::{Ipv4Network, Ipv6Network};
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use std::fmt::Display;
 use std::str::FromStr;
 use std::time::Duration;
+use tokio::fs::DirEntry;
 
 #[derive(Default, Debug)]
 pub struct BlocklistRanges {
@@ -15,20 +16,20 @@ pub struct BlocklistRanges {
 
 impl BlocklistRanges {
     pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges {
-        info!("downloading blocklist");
+        debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
         match BlocklistRanges::download(&config.clone()).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
-                error!("Failed to download blocklist: {}", e);
+                error!("failed to download blocklist: {}", e);
             }
         };
 
-        info!("loading custom ranges");
+        debug!("loading custom ranges");
         match BlocklistRanges::load(&config.clone()).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
-                error!("Failed to load custom ranges: {}", e);
+                error!("failed to load custom ranges: {}", e);
             }
         };
         merged
@@ -38,8 +39,8 @@ impl BlocklistRanges {
         let ipv4 = fetch_blocklist(config, &config.ipv4_url).await?;
         let ipv6 = fetch_blocklist(config, &config.ipv6_url).await?;
 
-        let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, true)?;
-        let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, true)?;
+        let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, None);
+        let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, None);
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
@@ -51,15 +52,11 @@ impl BlocklistRanges {
         let mut ipv4_ranges = Vec::new();
         let mut ipv6_ranges = Vec::new();
         while let Ok(Some(f)) = ipv4_files.next_entry().await {
-            let ipv4 = parse_from_string::<&str>(&tokio::fs::read_to_string(f.path()).await?, None);
-            let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, true)?;
-            ipv4_ranges.extend(ipv4);
+            read_file(f, &mut ipv4_ranges, config).await;
         }
 
         while let Ok(Some(f)) = ipv6_files.next_entry().await {
-            let ipv6 = parse_from_string::<&str>(&tokio::fs::read_to_string(f.path()).await?, None);
-            let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, true)?;
-            ipv6_ranges.extend(ipv6);
+            read_file(f, &mut ipv6_ranges, config).await;
         }
 
         Ok(BlocklistRanges {
@@ -72,6 +69,31 @@ impl BlocklistRanges {
         self.ipv4.extend(other.ipv4);
         self.ipv6.extend(other.ipv6);
     }
+}
+
+async fn read_file<T>(f: DirEntry, ranges: &mut Vec<NetworkType<T>>, config: &BlocklistConfig)
+where
+    T: ListNetwork + FromStr + Display + std::fmt::Debug,
+    <T as FromStr>::Err: Display,
+    AppError: From<<T as FromStr>::Err>,
+{
+    let content = match tokio::fs::read_to_string(f.path()).await {
+        Ok(content) => content,
+        Err(e) => {
+            warn!(
+                "custom ranges: file {} could not be open: {e}",
+                f.path().display()
+            );
+            return;
+        }
+    };
+    let parsed = parse_from_string::<&str>(content.as_str(), config.split_string.as_deref());
+    let validated = validate_subnets::<T>(
+        &parsed,
+        Some(format!("custom ranges: file {}", f.path().display()).as_mut_str()),
+    );
+
+    ranges.extend(validated);
 }
 
 async fn fetch_blocklist(
@@ -94,7 +116,7 @@ async fn fetch_blocklist(
 
     let blocklist = parse_from_string::<&str>(body.trim(), config.split_string.as_deref());
 
-    info!("blocklist fetched from: {endpoint}");
+    debug!("blocklist fetched from: {endpoint}");
     Ok(blocklist)
 }
 
@@ -113,7 +135,7 @@ pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> 
     }
 }
 
-pub fn validate_subnets<T>(ips: &[String], strict: bool) -> Result<Vec<NetworkType<T>>, AppError>
+pub fn validate_subnets<T>(ips: &[String], log: Option<&str>) -> Vec<NetworkType<T>>
 where
     T: ListNetwork + FromStr + Display + std::fmt::Debug,
     <T as FromStr>::Err: Display,
@@ -125,12 +147,8 @@ where
             Ok(parsed_ip) => {
                 if parsed_ip.is_network() {
                     parsed.push(NetworkType::Ip(parsed_ip));
-                } else if strict {
-                    return Err(AppError::ParseError(format!(
-                        "invalid ip: {parsed_ip}; not a network"
-                    )));
                 } else {
-                    warn!("invalid ip: {ip}; not a network");
+                    warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
                 }
             }
             Err(e) => {
@@ -144,15 +162,12 @@ where
                     parsed.push(NetworkType::Range(start, end));
                     continue;
                 }
-                if strict {
-                    return Err(AppError::ParseError(format!("{e}: {ip}")));
-                }
-                warn!("ip could not be parsed: {ip}; {e}");
+                warn!("{}:ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
             }
         }
     }
 
-    Ok(parsed)
+    parsed
 }
 
 pub fn join_ips<T>(ips: &[NetworkType<T>]) -> String

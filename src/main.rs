@@ -2,19 +2,24 @@ use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::handlers::iplist::{get_all_continents, get_all_countries, get_by_asn, get_by_location};
 use crate::iplist::iprange::{IpRanges, generate_ranges};
-use axum::Router;
+use axum::extract::{ConnectInfo, MatchedPath};
+use axum::http::{Request, Response};
 use axum::routing::get;
+use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use log::{debug, error, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::lookup_host;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
+use tracing::{field, info_span};
+use tracing_appender::non_blocking;
 
 use crate::blocklist::fetch::BlocklistRanges;
 use crate::handlers::blocklist::get_blocklist;
@@ -72,7 +77,9 @@ async fn main() -> Result<(), AppError> {
     debug!("Using config: {:?}", &config);
 
     let timer = tracing_subscriber::fmt::time::LocalTime::rfc_3339();
+    let (non_blocking, _non_blocking_guard) = non_blocking(std::io::stdout());
     tracing_subscriber::fmt()
+        .with_writer(non_blocking)
         .with_timer(timer)
         .with_target(true)
         .with_env_filter(env)
@@ -91,7 +98,43 @@ async fn main() -> Result<(), AppError> {
         .route("/api/iplist/location", get(get_by_location))
         .route("/api/iplist/asn", get(get_by_asn))
         .route("/api/blocklist", get(get_blocklist))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &Request<_>| {
+                    let matched_path = req
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(MatchedPath::as_str);
+
+                    let remote_addr = req
+                        .extensions()
+                        .get::<ConnectInfo<SocketAddr>>()
+                        .map(|c| c.0.to_string())
+                        .unwrap_or("unknown".to_string());
+
+                    info_span!(
+                        "request",
+                        remote_addr = ?remote_addr,
+                        method = %req.method(),
+                        path = matched_path,
+                        uri = %req.uri(),
+                        version = ?req.version(),
+                        user_agent = ?req.headers().get(http::header::USER_AGENT).map(|v| v.to_str().unwrap_or_default()).unwrap_or("unknown"),
+                        referer = ?req.headers().get(http::header::REFERER).map(|v| v.to_str().unwrap_or_default()).unwrap_or("unknown"),
+                        status = field::Empty,
+                        latency_ms = field::Empty,
+
+                    )
+                })
+                .on_response(
+                    |res: &Response<_>, latency: Duration, span: &tracing::Span| {
+                        span.record("status", tracing::field::display(res.status()));
+                        span.record("latency_ms", latency.as_millis());
+
+                        tracing::info!(parent: span, "request");
+                    },
+                ),
+        )
         .with_state(state);
 
     let tls_config = if let (Some(cert), Some(key)) =
@@ -106,12 +149,18 @@ async fn main() -> Result<(), AppError> {
         if let Some(ref tls) = tls_config {
             info!("listening with TLS on {}", hostname);
             axum_server::bind_rustls(hostname, tls.clone())
-                .serve(app.clone().into_make_service())
+                .serve(
+                    app.clone()
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
                 .await?;
         } else {
             info!("listening on {}", hostname);
             axum_server::bind(hostname)
-                .serve(app.clone().into_make_service())
+                .serve(
+                    app.clone()
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
                 .await?;
         }
     }
@@ -138,7 +187,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();
                 Box::pin(async move {
-                    info!("Scheduler:downloading iplists");
+                    debug!("scheduler:starting iplist update");
                     match generate_ranges(&config_local.clone()).await {
                         Ok(ranges) => {
                             *state_local.ip_ranges.write().await = ranges;
@@ -147,6 +196,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                             error!("Failed to generate ranges: {}", e);
                         }
                     };
+                    info!("scheduler:iplist update completed");
                 })
             },
         )?)
@@ -161,10 +211,10 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();
                 Box::pin(async move {
-                    info!("Scheduler: starting blocklist update");
+                    debug!("scheduler:starting blocklist update");
                     let merged = BlocklistRanges::merged_blocklist_ranges(&config_local).await;
                     *state_local.blocklist_ranges.write().await = merged;
-                    info!("Scheduler: blocklist update completed");
+                    info!("scheduler:blocklist update completed");
                 })
             },
         )?)

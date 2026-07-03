@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -89,7 +89,7 @@ impl IpLocationRange {
 
         let t = Instant::now();
 
-        info!("Parsing {} Location IP ranges", ranges.len());
+        debug!("parsing {} Location IP ranges", ranges.len());
         let mut location_map = HashMap::new();
         for location in locations {
             location_map.insert(location.country_alpha2.clone(), location);
@@ -105,7 +105,7 @@ impl IpLocationRange {
             }
         }
         info!(
-            "Parsed {} Location IP ranges in {:?}",
+            "parsed {} Location IP ranges in {:?}",
             parsed_ranges.len(),
             t.elapsed()
         );
@@ -152,7 +152,7 @@ impl IpAsnRange {
 
         let ranges = parser.parse().await?;
 
-        info!("Parsed {} ASN IP ranges", ranges.len(),);
+        info!("parsed {} ASN IP ranges", ranges.len(),);
 
         Ok(ranges)
     }
@@ -189,7 +189,7 @@ impl IpLocationRanges {
             )
             .await?;
         }
-        info!("Country files saved");
+        debug!("country files saved");
         for (continent, ranges) in &self.by_continent {
             let path = format!("{}/gen/{}", config.output_folder, continent);
             tokio::fs::write(
@@ -207,7 +207,7 @@ impl IpLocationRanges {
             )
             .await?;
         }
-        info!("Continent files saved");
+        debug!("continent files saved");
         Ok(())
     }
 }
@@ -247,7 +247,7 @@ impl IpRanges {
                 .push(range.clone());
         }
         info!(
-            "Loaded {} unique location ranges and {} unique ASN ranges",
+            "loaded {} unique location ranges and {} unique ASN ranges",
             location_ranges_by_country.len(),
             asn_ranges_by_asn.len()
         );
