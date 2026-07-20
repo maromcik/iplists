@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { apiFetch } from "../js/api";
 
     let ips = "";
 
@@ -15,7 +16,7 @@
             apiUrl += `?version=${version}`;
         }
         
-        const response = await fetch(apiUrl);
+        const response = await apiFetch(apiUrl);
         ips = await response.text();
 
         const newParams = new URLSearchParams();

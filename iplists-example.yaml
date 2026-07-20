@@ -4,6 +4,9 @@ all_log_level: info
 #tls_key_path: <path>/privkey.pem
 #hostnames:
 #   - "localhost:443"
+# Optional file-based token authentication.
+# Each line: username:token  (empty lines and lines starting with # are ignored)
+#auth_token_file_path: users.txt
 iplist:
    country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
    asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz

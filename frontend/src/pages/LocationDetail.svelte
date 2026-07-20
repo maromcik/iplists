@@ -1,6 +1,8 @@
 <script lang="ts">
+    import { apiFetch } from "../js/api";
+
     let ips = "";
-    
+
     const params = new URLSearchParams(window.location.search);
     let country = params.get('country');
     let continent = params.get('continent');
@@ -17,7 +19,7 @@
     async function fetchIps() {
         if (!locationValue || !locationType) return;
         
-        const response = await fetch(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
+        const response = await apiFetch(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
         
         let text = await response.text();
         

@@ -1,15 +1,16 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
+use crate::handlers::auth::{auth_middleware, load_users};
 use crate::handlers::iplist::{get_all_continents, get_all_countries, get_by_asn, get_by_location};
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
-use axum::{Router, http};
+use axum::{Router, http, middleware};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use log::{debug, error, info};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -50,17 +51,20 @@ pub struct AppState {
     pub config: AppConfig,
     pub ip_ranges: RwLock<IpRanges>,
     pub blocklist_ranges: RwLock<BlocklistRanges>,
+    pub users: HashMap<String, String>,
 }
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let ip_ranges = generate_ranges(&config.iplist).await?;
         let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
+        let users = load_users(&config.auth_token_file_path).await?;
 
         Ok(Arc::new(Self {
             config,
             ip_ranges: RwLock::new(ip_ranges),
             blocklist_ranges: RwLock::new(blocklist_ranges),
+            users,
         }))
     }
 }
@@ -88,16 +92,25 @@ async fn main() -> Result<(), AppError> {
     let state = AppState::new(config.clone()).await?;
     schedule_tasks(state.clone(), &config).await?;
 
+    let api_routes = Router::new()
+        .route("/iplist/country", get(get_all_countries))
+        .route("/iplist/continent", get(get_all_continents))
+        .route("/iplist/location", get(get_by_location))
+        .route("/iplist/asn", get(get_by_asn))
+        .route("/blocklist", get(get_blocklist))
+        .with_state(state.clone());
+
     let app = Router::new()
         .fallback_service(
             ServeDir::new("./frontend/dist").fallback(ServeFile::new("./frontend/dist/index.html")),
         )
+        .nest_service("/lists", ServeDir::new("lists"))
+        .nest("/api", api_routes)
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
         .nest_service("/static", ServeDir::new("static"))
-        .route("/api/iplist/country", get(get_all_countries))
-        .route("/api/iplist/continent", get(get_all_continents))
-        .route("/api/iplist/location", get(get_by_location))
-        .route("/api/iplist/asn", get(get_by_asn))
-        .route("/api/blocklist", get(get_blocklist))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|req: &Request<_>| {

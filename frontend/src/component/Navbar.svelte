@@ -1,5 +1,6 @@
 <script lang="ts">
   import { link } from 'svelte-routing';
+  import { token } from '../js/store';
 
   type NavItem = { label: string, path: string };
   export let navItems: NavItem[] = [];
@@ -58,6 +59,12 @@
             {item.label}
         </a>
         {/each}
+        <input
+            type="password"
+            bind:value={$token}
+            placeholder="API token"
+            class="px-3 py-1 rounded bg-white/10 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:border-amber-500"
+        />
     </div>
 
     <!-- Hamburger Menu Button -->
@@ -90,5 +97,11 @@
             {item.label}
         </a>
         {/each}
+        <input
+            type="password"
+            bind:value={$token}
+            placeholder="API token"
+            class="px-3 py-2 rounded bg-white/10 text-white placeholder-white/70 border border-white/30 focus:outline-none focus:border-amber-500 w-3/4"
+        />
     </div>
 </div>

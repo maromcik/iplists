@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { apiFetch } from "../js/api";
 
     let ips = "";
     let asnInput = "";
@@ -23,7 +24,7 @@
         // Construct API URL
         const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`;
         
-        const response = await fetch(apiUrl);
+        const response = await apiFetch(apiUrl);
         
         let text = await response.text();
         

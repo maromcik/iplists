@@ -1,11 +1,12 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { navigate } from 'svelte-routing';
+    import { apiFetch } from "../js/api";
     import type { Location } from "../js/types";
-    
+
     let countries: Location[] = [];
     onMount(async () => {
-        const response = await fetch("/api/iplist/country");
+        const response = await apiFetch("/api/iplist/country");
         countries = await response.json();
     });
 
