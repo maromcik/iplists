@@ -1,15 +1,18 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import { apiFetch } from "../js/api";
+    import { apiFetchText, ApiRequestError } from "../js/api";
+    import ErrorAlert from "../component/ErrorAlert.svelte";
+    import { AppErrorKind, type ApiError } from "../js/types";
 
     let ips = "";
     let asnInput = "";
-    
+    let error: ApiError | null = null;
+    let loading = false;
+
     const params = new URLSearchParams(window.location.search);
     let asn = params.get('asn');
     let formatParam = params.get('format');
     let format = formatParam ? formatParam.charAt(0).toUpperCase() + formatParam.slice(1) : "Json";
-    
+
     if (asn) {
         asnInput = asn;
     }
@@ -20,27 +23,35 @@
 
     async function fetchIps() {
         if (!asn) return;
-        
-        // Construct API URL
+
+        loading = true;
+        error = null;
+        ips = "";
+
         const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`;
-        
-        const response = await apiFetch(apiUrl);
-        
-        let text = await response.text();
-        
-        if (format === 'Json') {
-            try {
-                const parsed = JSON.parse(text);
-                const finalParsed = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
-                ips = JSON.stringify(finalParsed, null, 2);
-            } catch (e) {
+
+        try {
+            const text = await apiFetchText(apiUrl);
+
+            if (format === 'Json') {
+                try {
+                    const parsed = JSON.parse(text);
+                    const finalParsed = (typeof parsed === 'string') ? JSON.parse(parsed) : parsed;
+                    ips = JSON.stringify(finalParsed, null, 2);
+                } catch (e) {
+                    ips = text;
+                }
+            } else {
                 ips = text;
             }
-        } else {
-            ips = text;
+        } catch (err) {
+            error = err instanceof ApiRequestError
+                ? err.response
+                : { code: 0, kind: AppErrorKind.Unknown, description: String(err) };
+        } finally {
+            loading = false;
         }
 
-        // Update URL
         const newParams = new URLSearchParams();
         newParams.set('asn', asn);
         newParams.set('format', format.toLowerCase());
@@ -73,7 +84,7 @@
         });
     }
 
-    // Reactively fetch when format changes
+    // Reactively fetch when format or ASN changes
     $: format, asn, fetchIps();
 </script>
 
@@ -95,7 +106,11 @@
         </button>
     </div>
 
-    {#if asn}
+    {#if loading}
+        <p class="text-gray-600 dark:text-gray-400">Loading ASN ranges…</p>
+    {:else if error}
+        <ErrorAlert error={error} title="Could not load ASN ranges" />
+    {:else if asn}
         {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`}
         <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>

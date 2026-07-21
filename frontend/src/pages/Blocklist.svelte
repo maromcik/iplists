@@ -1,8 +1,11 @@
 <script lang="ts">
-    import { onMount } from "svelte";
-    import { apiFetch } from "../js/api";
+    import { apiFetchText, ApiRequestError } from "../js/api";
+    import ErrorAlert from "../component/ErrorAlert.svelte";
+    import { AppErrorKind, type ApiError } from "../js/types";
 
     let ips = "";
+    let error: ApiError | null = null;
+    let loading = false;
 
     const params = new URLSearchParams(window.location.search);
     let version = params.get('version') || "";
@@ -11,13 +14,24 @@
     let copiedUrl = "";
 
     async function fetchIps() {
+        loading = true;
+        error = null;
+        ips = "";
+
         let apiUrl = '/api/blocklist';
         if (version) {
             apiUrl += `?version=${version}`;
         }
-        
-        const response = await apiFetch(apiUrl);
-        ips = await response.text();
+
+        try {
+            ips = await apiFetchText(apiUrl);
+        } catch (err) {
+            error = err instanceof ApiRequestError
+                ? err.response
+                : { code: 0, kind: AppErrorKind.Unknown, description: String(err) };
+        } finally {
+            loading = false;
+        }
 
         const newParams = new URLSearchParams();
         if (version) newParams.set('version', version);
@@ -57,31 +71,37 @@
         </select>
     </div>
 
-    <div class="space-y-6">
-        <div>
-            <h4 class="text-xl font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                {version === 'ipv4' ? 'IPv4 Blocklist' : version === 'ipv6' ? 'IPv6 Blocklist' : 'Blocklist'}
-            </h4>
-            <div class="mb-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
-                <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
-                    <a href={apiUrl} target="_blank" class="hover:underline flex-grow">
-                        {apiUrl}
-                    </a>
-                    <button 
-                        on:click={() => copyUrl(apiUrl)} 
-                        class="text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
-                    >
-                        {copiedUrl === apiUrl ? "Copied!" : "Copy"}
+    {#if loading}
+        <p class="text-gray-600 dark:text-gray-400">Loading blocklist…</p>
+    {:else if error}
+        <ErrorAlert error={error} title="Could not load blocklist" />
+    {:else}
+        <div class="space-y-6">
+            <div>
+                <h4 class="text-xl font-semibold mb-2 text-gray-700 dark:text-gray-300">
+                    {version === 'ipv4' ? 'IPv4 Blocklist' : version === 'ipv6' ? 'IPv6 Blocklist' : 'Blocklist'}
+                </h4>
+                <div class="mb-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
+                    <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
+                        <a href={apiUrl} target="_blank" class="hover:underline flex-grow">
+                            {apiUrl}
+                        </a>
+                        <button 
+                            on:click={() => copyUrl(apiUrl)} 
+                            class="text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
+                        >
+                            {copiedUrl === apiUrl ? "Copied!" : "Copy"}
+                        </button>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button on:click={() => copyToClipboard(ips)} class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors">
+                        {copyButtonText}
                     </button>
+                    <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
                 </div>
             </div>
-            <div class="relative">
-                <button on:click={() => copyToClipboard(ips)} class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded transition-colors">
-                    {copyButtonText}
-                </button>
-                <pre class="bg-gray-900 dark:bg-black text-amber-500 p-6 rounded-xl shadow-inner overflow-auto text-sm font-mono leading-relaxed">{ips}</pre>
-            </div>
         </div>
-    </div>
+    {/if}
 </div>

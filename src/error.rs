@@ -12,10 +12,10 @@ use tokio::task::JoinError;
 #[derive(Serialize)]
 pub struct GenericError {
     pub code: u16,
-    pub description: String,
+    pub error: AppError,
 }
 
-#[derive(Error, Clone)]
+#[derive(Error, Clone, Serialize)]
 pub enum AppError {
     #[error("Internal server error: {0}")]
     InternalServerError(String),
@@ -156,9 +156,10 @@ impl IntoResponse for AppError {
             AppError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
+
         let template = GenericError {
             code: status_code.as_u16(),
-            description: self.to_string(),
+            error: self,
         };
         (status_code, Json(template)).into_response()
     }
