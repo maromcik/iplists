@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/app
 
 COPY ./src ./src
-COPY ./templates ./templates
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
 
