@@ -1,13 +1,19 @@
-use crate::templates::error::GenericError;
-use askama::Template;
+use axum::Json;
 use axum::http::StatusCode;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{IntoResponse, Response};
+use serde::Serialize;
 use std::env;
 use std::error::Error;
 use std::fmt::Debug;
 use std::num::ParseIntError;
 use thiserror::Error;
 use tokio::task::JoinError;
+
+#[derive(Serialize)]
+pub struct GenericError {
+    pub code: u16,
+    pub description: String,
+}
 
 #[derive(Error, Clone)]
 pub enum AppError {
@@ -152,13 +158,8 @@ impl IntoResponse for AppError {
         };
         let template = GenericError {
             code: status_code.as_u16(),
-            status_code: status_code.to_string(),
             description: self.to_string(),
         };
-
-        match template.render() {
-            Ok(body) => (status_code, Html(body)).into_response(),
-            Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-        }
+        (status_code, Json(template)).into_response()
     }
 }

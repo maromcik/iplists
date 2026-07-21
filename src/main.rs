@@ -32,7 +32,6 @@ pub mod error;
 pub mod forms;
 pub mod handlers;
 pub mod iplist;
-pub mod templates;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
