@@ -77,7 +77,7 @@ async fn main() -> Result<(), AppError> {
     let env = EnvFilter::new(
         format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str(),
     );
-    debug!("Using config: {:?}", &config);
+    debug!("Using config: {:?}", config);
 
     let timer = tracing_subscriber::fmt::time::LocalTime::rfc_3339();
     let (non_blocking, _non_blocking_guard) = non_blocking(std::io::stdout());
