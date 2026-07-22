@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
 use crate::forms::iplist::{IpListFormByAsn, IpListFormByCountry};
-use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRangeByIp};
+use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByIp};
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -33,6 +33,22 @@ pub async fn get_all_continents(
     Ok(Json(continents))
 }
 
+fn get_ips_by_version(
+    ips: Arc<IpLocationRangeByIp>,
+    form: &IpListFormByCountry,
+) -> Vec<IpLocationRange> {
+    match form.version {
+        Some(IpVersion::Ipv4) => ips.ipv4.clone(),
+        Some(IpVersion::Ipv6) => ips.ipv6.clone(),
+        None => {
+            let mut ips_all = Vec::new();
+            ips_all.extend(ips.ipv4.iter().cloned());
+            ips_all.extend(ips.ipv6.iter().cloned());
+            ips_all
+        }
+    }
+}
+
 pub async fn get_by_location(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<IpListFormByCountry>,
@@ -44,30 +60,12 @@ pub async fn get_by_location(
             .await
             .get_by_continent(continent)
             .await?;
-        let ips = match form.version {
-            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
-            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
-            None => {
-                let mut ips_all = Vec::new();
-                ips_all.extend(ips.ipv4.iter().cloned());
-                ips_all.extend(ips.ipv6.iter().cloned());
-                ips_all
-            }
-        };
-        form.format.format(&ips, form.continent.as_deref())
+        form.format
+            .format(&get_ips_by_version(ips, &form), form.continent.as_deref())
     } else if let Some(country) = &form.country {
         let ips = state.ip_ranges.read().await.get_by_country(country).await?;
-        let ips = match form.version {
-            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
-            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
-            None => {
-                let mut ips_all = Vec::new();
-                ips_all.extend(ips.ipv4.iter().cloned());
-                ips_all.extend(ips.ipv6.iter().cloned());
-                ips_all
-            }
-        };
-        form.format.format(&ips, form.country.as_deref())
+        form.format
+            .format(&get_ips_by_version(ips, &form), form.country.as_deref())
     } else {
         let ips = state
             .ip_ranges
@@ -81,17 +79,8 @@ pub async fn get_by_location(
                 acc.ipv6.extend(v.ipv6.iter().cloned());
                 acc
             });
-        let ips = match form.version {
-            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
-            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
-            None => {
-                let mut ips_all = Vec::new();
-                ips_all.extend(ips.ipv4.iter().cloned());
-                ips_all.extend(ips.ipv6.iter().cloned());
-                ips_all
-            }
-        };
-        form.format.format(&ips, None)
+        form.format
+            .format(&get_ips_by_version(Arc::new(ips), &form), None)
     };
 
     Ok(formatted)
