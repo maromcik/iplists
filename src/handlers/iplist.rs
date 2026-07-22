@@ -1,7 +1,9 @@
 use crate::AppState;
 use crate::error::AppError;
+use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
 use crate::forms::iplist::{IpListFormByAsn, IpListFormByCountry};
+use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRangeByIp};
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -42,12 +44,53 @@ pub async fn get_by_location(
             .await
             .get_by_continent(continent)
             .await?;
+        let ips = match form.version {
+            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
+            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
+            None => {
+                let mut ips_all = Vec::new();
+                ips_all.extend(ips.ipv4.iter().cloned());
+                ips_all.extend(ips.ipv6.iter().cloned());
+                ips_all
+            }
+        };
         form.format.format(&ips, form.continent.as_deref())
     } else if let Some(country) = &form.country {
         let ips = state.ip_ranges.read().await.get_by_country(country).await?;
+        let ips = match form.version {
+            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
+            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
+            None => {
+                let mut ips_all = Vec::new();
+                ips_all.extend(ips.ipv4.iter().cloned());
+                ips_all.extend(ips.ipv6.iter().cloned());
+                ips_all
+            }
+        };
         form.format.format(&ips, form.country.as_deref())
     } else {
-        let ips = state.ip_ranges.read().await.location_ranges.all.clone();
+        let ips = state
+            .ip_ranges
+            .read()
+            .await
+            .location_ranges
+            .by_continent
+            .values()
+            .fold(IpLocationRangeByIp::default(), |mut acc, v| {
+                acc.ipv4.extend(v.ipv4.iter().cloned());
+                acc.ipv6.extend(v.ipv6.iter().cloned());
+                acc
+            });
+        let ips = match form.version {
+            Some(IpVersion::Ipv4) => ips.ipv4.clone(),
+            Some(IpVersion::Ipv6) => ips.ipv6.clone(),
+            None => {
+                let mut ips_all = Vec::new();
+                ips_all.extend(ips.ipv4.iter().cloned());
+                ips_all.extend(ips.ipv6.iter().cloned());
+                ips_all
+            }
+        };
         form.format.format(&ips, None)
     };
 
@@ -61,7 +104,30 @@ pub async fn get_by_asn(
     let ips = if let Some(asn) = &form.asn {
         state.ip_ranges.read().await.get_by_asn(asn).await?
     } else {
-        state.ip_ranges.read().await.asn_ranges.all.clone()
+        Arc::new(
+            state
+                .ip_ranges
+                .read()
+                .await
+                .asn_ranges
+                .by_asn
+                .values()
+                .fold(IpAsnRangeByIp::default(), |mut acc, v| {
+                    acc.ipv4.extend(v.ipv4.iter().cloned());
+                    acc.ipv6.extend(v.ipv6.iter().cloned());
+                    acc
+                }),
+        )
+    };
+    let ips = match form.version {
+        Some(IpVersion::Ipv4) => ips.ipv4.clone(),
+        Some(IpVersion::Ipv6) => ips.ipv6.clone(),
+        None => {
+            let mut ips_all = Vec::new();
+            ips_all.extend(ips.ipv4.iter().cloned());
+            ips_all.extend(ips.ipv6.iter().cloned());
+            ips_all
+        }
     };
     let formatted = form
         .format

@@ -11,6 +11,7 @@
     let country = params.get('country');
     let continent = params.get('continent');
     let formatParam = params.get('format');
+    let version = params.get('version') || "";
     let format = formatParam ? formatParam.charAt(0).toUpperCase() + formatParam.slice(1) : "Json";
 
     let locationValue = country || continent || "";
@@ -28,7 +29,7 @@
         ips = "";
 
         try {
-            const text = await apiFetchText(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`);
+            const text = await apiFetchText(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`);
 
             if (format === 'Json') {
                 try {
@@ -53,6 +54,7 @@
         if (country) newParams.set('country', country);
         if (continent) newParams.set('continent', continent);
         newParams.set('format', format.toLowerCase());
+        if (version) newParams.set('version', version);
         const newUrl = `/location?${newParams.toString()}`;
         if (window.location.pathname + window.location.search !== newUrl) {
             window.history.replaceState(null, '', newUrl);
@@ -77,9 +79,9 @@
         });
     }
 
-    // Reactively fetch when format changes
-    $: format, fetchIps();
-    $: apiUrl = `${window.location.origin}/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}`;
+    // Reactively fetch when format or version changes
+    $: format, version, fetchIps();
+    $: apiUrl = `${window.location.origin}/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
@@ -91,8 +93,8 @@
         <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Static Lists:</h4>
             <div class="space-y-2">
-                {#each [`txt`, `nft`] as ext}
-                    {@const url = `${window.location.origin}/lists/gen/${locationValue}.${ext}`}
+                {#each [`.txt`, `.nft`, '-ipv4.txt', '-ipv6.txt', '-ipv4.nft', '-ipv6.nft'] as ext}
+                    {@const url = `${window.location.origin}/lists/gen/${locationValue}${ext}`}
                     <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
                         <a href={url} target="_blank" class="hover:underline flex-grow">
                             {url}
@@ -126,6 +128,15 @@
                         {copiedUrl === apiUrl ? "Copied!" : "Copy"}
                     </button>
                 </div>
+            </div>
+
+            <div class="mb-6">
+                <label for="version-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Version:</label>
+                <select id="version-select" bind:value={version} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+                    <option value="">All</option>
+                    <option value="ipv4">IPv4</option>
+                    <option value="ipv6">IPv6</option>
+                </select>
             </div>
 
             <div class="mb-6">

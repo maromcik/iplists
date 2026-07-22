@@ -1,7 +1,8 @@
 use crate::AppState;
 use crate::blocklist::fetch::join_ips;
 use crate::error::AppError;
-use crate::forms::blocklist::{BlocklistIpVersion, IpVersion};
+use crate::forms::IpVersion;
+use crate::forms::blocklist::BlocklistIpVersion;
 use crate::forms::extractors::AppQuery;
 use axum::extract::State;
 use axum::response::IntoResponse;

@@ -48,17 +48,30 @@ impl OutputFormat {
                     )
                     .as_str(),
                 );
+                let mut ipv4: bool = false;
+                let mut ipv6: bool = false;
                 for ip in data {
                     if ip.start().is_ipv4() && ip.end().is_ipv4() {
                         output.push_str(&format!("\t\t{}-{},\n", ip.start(), ip.end()));
+                        ipv4 = true;
                     } else {
                         output6.push_str(&format!("\t\t{}-{},\n", ip.start(), ip.end()));
+                        ipv6 = true;
                     }
                 }
                 output.push_str("\t}\n}");
                 output6.push_str("\t}\n}");
-                output.push('\n');
-                output.push_str(output6.as_str());
+                let output = match (ipv4, ipv6) {
+                    (true, true) => {
+                        output.push('\n');
+                        output.push_str(output6.as_str());
+                        output
+                    }
+                    (true, false) => output,
+                    (false, true) => output6,
+                    (false, false) => "".to_string(),
+                };
+
                 FormattedOutput::new(output, OutputFormat::Nftables)
             }
         }

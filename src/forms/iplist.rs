@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::iplist::formatter::OutputFormat;
+use crate::{forms::IpVersion, iplist::formatter::OutputFormat};
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
 pub struct IpListFormByCountry {
@@ -10,6 +10,8 @@ pub struct IpListFormByCountry {
     pub continent: Option<String>,
     #[serde(default)]
     pub format: OutputFormat,
+    #[serde(default)]
+    pub version: Option<IpVersion>,
 }
 
 #[derive(Debug, Deserialize, Eq, PartialEq)]
@@ -18,4 +20,6 @@ pub struct IpListFormByAsn {
     pub asn: Option<u32>,
     #[serde(default)]
     pub format: OutputFormat,
+    #[serde(default)]
+    pub version: Option<IpVersion>,
 }

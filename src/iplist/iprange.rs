@@ -114,7 +114,7 @@ impl IpLocationRange {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IpAsnRange {
     pub start: IpAddr,
     pub end: IpAddr,
@@ -159,16 +159,39 @@ impl IpAsnRange {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpAsnRangeByIp {
+    pub ipv4: Vec<IpAsnRange>,
+    pub ipv6: Vec<IpAsnRange>,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpAsnRanges {
-    pub all: Arc<Vec<IpAsnRange>>,
-    pub by_asn: HashMap<u32, Arc<Vec<IpAsnRange>>>,
+    pub by_asn: HashMap<u32, Arc<IpAsnRangeByIp>>,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpLocationRangeByIp {
+    pub ipv4: Vec<IpLocationRange>,
+    pub ipv6: Vec<IpLocationRange>,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRanges {
-    pub all: Arc<Vec<IpLocationRange>>,
-    pub by_country: HashMap<String, Arc<Vec<IpLocationRange>>>,
-    pub by_continent: HashMap<String, Arc<Vec<IpLocationRange>>>,
+    pub by_country: HashMap<String, Arc<IpLocationRangeByIp>>,
+    pub by_continent: HashMap<String, Arc<IpLocationRangeByIp>>,
+}
+
+pub async fn save_data<T>(
+    data: &[T],
+    output: OutputFormat,
+    path: &str,
+    set_name: Option<&str>,
+) -> Result<(), AppError>
+where
+    T: Serialize + BaseIpRange,
+{
+    tokio::fs::write(path, output.format(data, set_name).to_string()).await?;
+    Ok(())
 }
 
 impl IpLocationRanges {
@@ -176,34 +199,96 @@ impl IpLocationRanges {
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
         for (country, ranges) in &self.by_country {
             let path = format!("{}/gen/{}", config.output_folder, country);
-            tokio::fs::write(
-                format!("{path}.txt"),
-                OutputFormat::Text.format(ranges, Some(country)).to_string(),
+            let mut merged = ranges.ipv4.clone();
+            merged.extend(ranges.ipv6.clone());
+            save_data(
+                &ranges.ipv4,
+                OutputFormat::Text,
+                &format!("{path}-ipv4.txt"),
+                Some(country),
             )
             .await?;
-            tokio::fs::write(
-                format!("{path}.nft"),
-                OutputFormat::Nftables
-                    .format(ranges, Some(country))
-                    .to_string(),
+            save_data(
+                &ranges.ipv6,
+                OutputFormat::Text,
+                &format!("{path}-ipv6.txt"),
+                Some(country),
+            )
+            .await?;
+            save_data(
+                &merged,
+                OutputFormat::Text,
+                &format!("{path}.txt"),
+                Some(country),
+            )
+            .await?;
+            save_data(
+                &ranges.ipv4,
+                OutputFormat::Nftables,
+                &format!("{path}-ipv4.nft"),
+                Some(country),
+            )
+            .await?;
+            save_data(
+                &ranges.ipv6,
+                OutputFormat::Nftables,
+                &format!("{path}-ipv6.nft"),
+                Some(country),
+            )
+            .await?;
+            save_data(
+                &merged,
+                OutputFormat::Nftables,
+                &format!("{path}.nft"),
+                Some(country),
             )
             .await?;
         }
         debug!("country files saved");
         for (continent, ranges) in &self.by_continent {
             let path = format!("{}/gen/{}", config.output_folder, continent);
-            tokio::fs::write(
-                format!("{path}.txt"),
-                OutputFormat::Text
-                    .format(ranges, Some(continent))
-                    .to_string(),
+            let mut merged = ranges.ipv4.clone();
+            merged.extend(ranges.ipv6.clone());
+            save_data(
+                &merged,
+                OutputFormat::Text,
+                &format!("{path}.txt"),
+                Some(continent),
             )
             .await?;
-            tokio::fs::write(
-                format!("{path}.nft"),
-                OutputFormat::Nftables
-                    .format(ranges, Some(continent))
-                    .to_string(),
+            save_data(
+                &ranges.ipv4,
+                OutputFormat::Text,
+                &format!("{path}-ipv4.txt"),
+                Some(continent),
+            )
+            .await?;
+            save_data(
+                &ranges.ipv6,
+                OutputFormat::Text,
+                &format!("{path}-ipv6.txt"),
+                Some(continent),
+            )
+            .await?;
+            save_data(
+                &merged,
+                OutputFormat::Nftables,
+                &format!("{path}.nft"),
+                Some(continent),
+            )
+            .await?;
+            save_data(
+                &ranges.ipv4,
+                OutputFormat::Nftables,
+                &format!("{path}-ipv4.nft"),
+                Some(continent),
+            )
+            .await?;
+            save_data(
+                &ranges.ipv6,
+                OutputFormat::Nftables,
+                &format!("{path}-ipv6.nft"),
+                Some(continent),
             )
             .await?;
         }
@@ -225,35 +310,70 @@ impl IpRanges {
         asn_ranges: Vec<IpAsnRange>,
         locations: Vec<Location>,
     ) -> Self {
-        let mut location_ranges_by_country: HashMap<String, Vec<IpLocationRange>> = HashMap::new();
-        let mut location_ranges_by_continent: HashMap<String, Vec<IpLocationRange>> =
-            HashMap::new();
-        for range in &location_ranges {
-            location_ranges_by_country
-                .entry(range.location.country_alpha2.clone())
-                .or_default()
-                .push(range.clone());
-            location_ranges_by_continent
-                .entry(range.location.continent.clone())
-                .or_default()
-                .push(range.clone());
+        let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        for range in location_ranges {
+            match (range.start.is_ipv4(), range.end.is_ipv4()) {
+                (true, true) => {
+                    location_ranges_by_country
+                        .entry(range.location.country_alpha2.clone())
+                        .or_default()
+                        .ipv4
+                        .push(range.clone());
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv4
+                        .push(range);
+                }
+                (false, false) => {
+                    location_ranges_by_country
+                        .entry(range.location.country_alpha2.clone())
+                        .or_default()
+                        .ipv6
+                        .push(range.clone());
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv6
+                        .push(range);
+                }
+                _ => {
+                    warn!("unexpected IP range: {:?}", range);
+                }
+            }
         }
 
-        let mut asn_ranges_by_asn: HashMap<u32, Vec<IpAsnRange>> = HashMap::new();
+        let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
         for range in &asn_ranges {
-            asn_ranges_by_asn
-                .entry(range.asn)
-                .or_default()
-                .push(range.clone());
+            match (range.start.is_ipv4(), range.end.is_ipv4()) {
+                (true, true) => {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv4
+                        .push(range.clone());
+                }
+                (false, false) => {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv6
+                        .push(range.clone());
+                }
+                _ => {
+                    warn!("unexpected IP range: {:?}", range);
+                }
+            }
         }
         info!(
             "loaded {} unique location ranges and {} unique ASN ranges",
             location_ranges_by_country.len(),
             asn_ranges_by_asn.len()
         );
+
         Self {
             location_ranges: IpLocationRanges {
-                all: Arc::new(location_ranges),
                 by_country: location_ranges_by_country
                     .into_iter()
                     .map(|(k, v)| (k, Arc::new(v)))
@@ -264,7 +384,6 @@ impl IpRanges {
                     .collect(),
             },
             asn_ranges: IpAsnRanges {
-                all: Arc::new(asn_ranges),
                 by_asn: asn_ranges_by_asn
                     .into_iter()
                     .map(|(k, v)| (k, Arc::new(v)))
@@ -277,9 +396,9 @@ impl IpRanges {
     pub async fn get_by_continent(
         &self,
         continent: &str,
-    ) -> Result<Arc<Vec<IpLocationRange>>, AppError> {
+    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
         let Some(ranges) = self.location_ranges.by_continent.get(continent) else {
-            return Ok(Arc::new(vec![]));
+            return Ok(Arc::new(IpLocationRangeByIp::default()));
         };
         Ok(ranges.clone())
     }
@@ -287,30 +406,18 @@ impl IpRanges {
     pub async fn get_by_country(
         &self,
         country_alpha2: &str,
-    ) -> Result<Arc<Vec<IpLocationRange>>, AppError> {
+    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
         let Some(ranges) = self.location_ranges.by_country.get(country_alpha2) else {
-            return Ok(Arc::new(vec![]));
+            return Ok(Arc::new(IpLocationRangeByIp::default()));
         };
         Ok(ranges.clone())
     }
 
-    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<Vec<IpAsnRange>>, AppError> {
+    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp>, AppError> {
         let Some(ranges) = self.asn_ranges.by_asn.get(asn) else {
-            return Ok(Arc::new(vec![]));
+            return Ok(Arc::new(IpAsnRangeByIp::default()));
         };
         Ok(ranges.clone())
-    }
-
-    pub fn get_by_country_name(
-        &self,
-        country_name_query: &str,
-    ) -> impl Iterator<Item = &IpLocationRange> {
-        self.location_ranges.all.iter().filter(|r| {
-            r.location
-                .country_name
-                .to_lowercase()
-                .contains(country_name_query.to_lowercase().as_str())
-        })
     }
 }
 

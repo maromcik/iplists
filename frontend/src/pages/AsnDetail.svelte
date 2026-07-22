@@ -11,6 +11,7 @@
     const params = new URLSearchParams(window.location.search);
     let asn = params.get('asn');
     let formatParam = params.get('format');
+    let version = params.get('version') || "";
     let format = formatParam ? formatParam.charAt(0).toUpperCase() + formatParam.slice(1) : "Json";
 
     if (asn) {
@@ -28,7 +29,7 @@
         error = null;
         ips = "";
 
-        const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`;
+        const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
 
         try {
             const text = await apiFetchText(apiUrl);
@@ -55,6 +56,9 @@
         const newParams = new URLSearchParams();
         newParams.set('asn', asn);
         newParams.set('format', format.toLowerCase());
+        if (version) {
+            newParams.set('version', version);
+        }
         const newUrl = `/asn?${newParams.toString()}`;
         if (window.location.pathname + window.location.search !== newUrl) {
             window.history.replaceState(null, '', newUrl);
@@ -85,21 +89,21 @@
     }
 
     // Reactively fetch when format or ASN changes
-    $: format, asn, fetchIps();
+    $: format, asn, version, fetchIps();
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
     <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">ASN Search</h3>
 
     <div class="mb-6 flex gap-4">
-        <input 
-            type="number" 
-            bind:value={asnInput} 
-            placeholder="Enter ASN (e.g. 254)" 
+        <input
+            type="number"
+            bind:value={asnInput}
+            placeholder="Enter ASN (e.g. 254)"
             class="flex-grow p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
         />
-        <button 
-            on:click={searchAsn} 
+        <button
+            on:click={searchAsn}
             class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
         >
             Search
@@ -111,20 +115,29 @@
     {:else if error}
         <ErrorAlert error={error} title="Could not load ASN ranges" />
     {:else if asn}
-        {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}`}
+        {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`}
         <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
             <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
                 <a href={url} target="_blank" class="hover:underline flex-grow">
                     {url}
                 </a>
-                <button 
-                    on:click={() => copyUrl(url)} 
+                <button
+                    on:click={() => copyUrl(url)}
                     class="text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
                 >
                     {copiedUrl === url ? "Copied!" : "Copy"}
                 </button>
             </div>
+        </div>
+
+        <div class="mb-6">
+            <label for="version-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Version:</label>
+            <select id="version-select" bind:value={version} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+                <option value="">All</option>
+                <option value="ipv4">IPv4</option>
+                <option value="ipv6">IPv6</option>
+            </select>
         </div>
 
         <div class="mb-6">
