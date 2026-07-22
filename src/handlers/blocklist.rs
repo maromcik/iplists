@@ -14,6 +14,7 @@ pub async fn get_blocklist(
     let out: String = match form.version {
         None => {
             let mut res = join_ips(&state.blocklist_ranges.read().await.ipv4);
+            res.push('\n');
             res.push_str(&join_ips(&state.blocklist_ranges.read().await.ipv6));
             res
         }
