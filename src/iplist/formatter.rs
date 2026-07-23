@@ -1,7 +1,6 @@
 use std::fmt::Display;
-use std::hash::Hash;
 
-use crate::iplist::iprange::{BaseIpRange, IpLocationRange};
+use crate::iplist::iprange::BaseIpRange;
 use crate::iptools::network::{ListNetwork, NetworkType};
 use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;

@@ -106,8 +106,14 @@ where
         let mut parsed_ranges = Vec::new();
         for range in ranges {
             if let Some(location) = location_map.get(&range.country_alpha2) {
+                let start = T::from_ip_addr(range.start).ok_or_else(|| {
+                    AppError::ParseError(format!("unsupported start IP: {}", range.start))
+                })?;
+                let end = T::from_ip_addr(range.end).ok_or_else(|| {
+                    AppError::ParseError(format!("unsupported end IP: {}", range.end))
+                })?;
                 parsed_ranges.push(IpLocationRange {
-                    network: NetworkType::<T>::Range(range.start, range.end),
+                    network: NetworkType::<T>::Range(start, end),
                     location: (*location).to_owned(),
                 });
             }
@@ -140,16 +146,22 @@ where
     pub isp: String,
 }
 
-impl<T> From<IpAsnRangeOnly> for IpAsnRange<T>
+impl<T> TryFrom<IpAsnRangeOnly> for IpAsnRange<T>
 where
     T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
 {
-    fn from(r: IpAsnRangeOnly) -> Self {
-        IpAsnRange {
-            network: NetworkType::Range(r.start, r.end),
+    type Error = AppError;
+
+    fn try_from(r: IpAsnRangeOnly) -> Result<Self, Self::Error> {
+        let start = T::from_ip_addr(r.start)
+            .ok_or_else(|| AppError::ParseError(format!("unsupported start IP: {}", r.start)))?;
+        let end = T::from_ip_addr(r.end)
+            .ok_or_else(|| AppError::ParseError(format!("unsupported end IP: {}", r.end)))?;
+        Ok(IpAsnRange {
+            network: NetworkType::Range(start, end),
             asn: r.asn,
             isp: r.isp,
-        }
+        })
     }
 }
 
@@ -187,8 +199,10 @@ where
 
         let ranges: Vec<IpAsnRangeOnly> = parser.parse().await?;
 
-        let processed_ranges: Vec<IpAsnRange<T>> =
-            ranges.into_iter().map(|r| IpAsnRange::from(r)).collect();
+        let processed_ranges: Vec<IpAsnRange<T>> = ranges
+            .into_iter()
+            .map(IpAsnRange::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
 
         info!("parsed {} ASN IP ranges", processed_ranges.len(),);
 

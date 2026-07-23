@@ -82,6 +82,10 @@ where
             NetworkType::Range(net1, net2) => net1.is_ipv6() && net2.is_ipv6(),
         }
     }
+
+    fn from_ip_addr(ip: IpAddr) -> Option<Self> {
+        Some(NetworkType::Ip(T::from_ip_addr(ip)?))
+    }
 }
 
 /// Trait that defines a generic abstraction for representing network-related operations on IPv4 and IPv6 subnets.
@@ -120,6 +124,12 @@ pub trait ListNetwork: Clone + Debug {
 
     fn is_ipv4(&self) -> bool;
     fn is_ipv6(&self) -> bool;
+
+    /// Creates a network value from a single IP address.
+    ///
+    /// For address-family-specific types (`Ipv4Network`, `Ipv6Network`),
+    /// returns `None` if the address family does not match.
+    fn from_ip_addr(ip: IpAddr) -> Option<Self>;
 }
 
 /// Implementation of the `BlockListNetwork` trait for IPv4 networks (`Ipv4Network`).
@@ -151,6 +161,13 @@ impl ListNetwork for Ipv4Network {
     fn is_network(&self) -> bool {
         self.network() == self.ip()
     }
+
+    fn from_ip_addr(ip: IpAddr) -> Option<Self> {
+        match ip {
+            IpAddr::V4(ip) => Ipv4Network::new(ip, 32).ok(),
+            IpAddr::V6(_) => None,
+        }
+    }
 }
 
 /// Implementation of the `BlockListNetwork` trait for IPv6 networks (`Ipv6Network`).
@@ -181,6 +198,13 @@ impl ListNetwork for Ipv6Network {
 
     fn is_network(&self) -> bool {
         self.network() == self.ip()
+    }
+
+    fn from_ip_addr(ip: IpAddr) -> Option<Self> {
+        match ip {
+            IpAddr::V4(_) => None,
+            IpAddr::V6(ip) => Ipv6Network::new(ip, 128).ok(),
+        }
     }
 }
 
@@ -233,6 +257,10 @@ impl ListNetwork for IpAddr {
             IpAddr::V6(_) => true,
         }
     }
+
+    fn from_ip_addr(ip: IpAddr) -> Option<Self> {
+        Some(ip)
+    }
 }
 
 impl ListNetwork for IpNetwork {
@@ -283,6 +311,13 @@ impl ListNetwork for IpNetwork {
             IpNetwork::V4(_) => false,
             IpNetwork::V6(_) => true,
         }
+    }
+
+    fn from_ip_addr(ip: IpAddr) -> Option<Self> {
+        Some(match ip {
+            IpAddr::V4(ip) => IpNetwork::V4(Ipv4Network::new(ip, 32).ok()?),
+            IpAddr::V6(ip) => IpNetwork::V6(Ipv6Network::new(ip, 128).ok()?),
+        })
     }
 }
 
