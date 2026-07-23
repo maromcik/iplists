@@ -1,41 +1,4 @@
-use crate::blocklist::network::ListNetwork;
-
-/// Represents a generic IP address in either IPv4 or IPv6 format using numeric representations.
-pub enum BitIp {
-    Ipv4(u32),
-    Ipv6(u128),
-}
-
-impl BitIp {
-    /// Performs a right-shift operation on an IP address by `n` bits
-    /// and returns the result in the corresponding `BitIp` format.
-    ///
-    /// # Parameters
-    /// - `n`: The number of bits to shift.
-    ///
-    /// # Returns
-    /// The shifted `BitIp` instance.
-    fn r_shift(&self, n: u8) -> Self {
-        match self {
-            BitIp::Ipv4(ip) => BitIp::Ipv4(*ip >> n),
-            BitIp::Ipv6(ip) => BitIp::Ipv6(*ip >> n),
-        }
-    }
-
-    /// Performs a bitwise AND operation between the IP address and the given `rhs` value.
-    ///
-    /// # Parameters
-    /// - `rhs`: The value to AND with (8 bits for this implementation).
-    ///
-    /// # Returns
-    /// The result of the operation as an 8-bit value.
-    fn b_and(self, rhs: u8) -> u8 {
-        match self {
-            BitIp::Ipv4(ip) => (ip & rhs as u32) as u8,
-            BitIp::Ipv6(ip) => (ip & rhs as u128) as u8,
-        }
-    }
-}
+use crate::iptools::network::ListNetwork;
 
 /// Represents a node in a prefix trie structure.
 /// Each node tracks whether it's part of a subnet (`is_subnet`)

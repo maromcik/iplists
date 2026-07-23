@@ -2,17 +2,20 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::time::Instant;
 
 use crate::iplist::fetch::{Downloader, Loader};
 use crate::iplist::formatter::OutputFormat;
+use crate::iptools::network::{ListNetwork, NetworkType};
 use crate::{error::AppError, iplist::config::IplistConfig};
 
 pub trait BaseIpRange {
-    fn start(&self) -> IpAddr;
-    fn end(&self) -> IpAddr;
+    type Network: ListNetwork + Clone + Debug;
+
+    fn network_type<'a>(&'a self) -> &'a NetworkType<Self::Network>;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -63,24 +66,30 @@ impl IpLocationRangeOnly {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IpLocationRange {
-    pub start: IpAddr,
-    pub end: IpAddr,
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpLocationRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub network: NetworkType<T>,
     pub location: Location,
 }
 
-impl BaseIpRange for IpLocationRange {
-    fn start(&self) -> IpAddr {
-        self.start
-    }
+impl<T> BaseIpRange for IpLocationRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    type Network = T;
 
-    fn end(&self) -> IpAddr {
-        self.end
+    fn network_type<'a>(&'a self) -> &'a NetworkType<Self::Network> {
+        &self.network
     }
 }
 
-impl IpLocationRange {
+impl<T> IpLocationRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
     pub async fn parse(
         config: &IplistConfig,
         locations: &Vec<Location>,
@@ -98,8 +107,7 @@ impl IpLocationRange {
         for range in ranges {
             if let Some(location) = location_map.get(&range.country_alpha2) {
                 parsed_ranges.push(IpLocationRange {
-                    start: range.start,
-                    end: range.end,
+                    network: NetworkType::<T>::Range(range.start, range.end),
                     location: (*location).to_owned(),
                 });
             }
@@ -114,26 +122,53 @@ impl IpLocationRange {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IpAsnRange {
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct IpAsnRangeOnly {
     pub start: IpAddr,
     pub end: IpAddr,
     pub asn: u32,
     pub isp: String,
 }
 
-impl BaseIpRange for IpAsnRange {
-    fn start(&self) -> IpAddr {
-        self.start
-    }
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct IpAsnRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub network: NetworkType<T>,
+    pub asn: u32,
+    pub isp: String,
+}
 
-    fn end(&self) -> IpAddr {
-        self.end
+impl<T> From<IpAsnRangeOnly> for IpAsnRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    fn from(r: IpAsnRangeOnly) -> Self {
+        IpAsnRange {
+            network: NetworkType::Range(r.start, r.end),
+            asn: r.asn,
+            isp: r.isp,
+        }
     }
 }
 
-impl IpAsnRange {
-    pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
+impl<T> BaseIpRange for IpAsnRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    type Network = T;
+
+    fn network_type<'a>(&'a self) -> &'a NetworkType<Self::Network> {
+        &self.network
+    }
+}
+
+impl<T> IpAsnRange<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange<T>>, AppError> {
         let filename = "ip-asn.csv.gz";
         let parser = match Loader::new(&config.output_folder, filename).load().await {
             Ok(parser) => parser,
@@ -150,35 +185,97 @@ impl IpAsnRange {
             }
         };
 
-        let ranges = parser.parse().await?;
+        let ranges: Vec<IpAsnRangeOnly> = parser.parse().await?;
 
-        info!("parsed {} ASN IP ranges", ranges.len(),);
+        let processed_ranges: Vec<IpAsnRange<T>> =
+            ranges.into_iter().map(|r| IpAsnRange::from(r)).collect();
 
-        Ok(ranges)
+        info!("parsed {} ASN IP ranges", processed_ranges.len(),);
+
+        Ok(processed_ranges)
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct IpAsnRangeByIp {
-    pub ipv4: Vec<IpAsnRange>,
-    pub ipv6: Vec<IpAsnRange>,
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpAsnRangeByIp<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub ipv4: Vec<IpAsnRange<T>>,
+    pub ipv6: Vec<IpAsnRange<T>>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct IpAsnRanges {
-    pub by_asn: HashMap<u32, Arc<IpAsnRangeByIp>>,
+impl<T> Default for IpAsnRangeByIp<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    fn default() -> Self {
+        Self {
+            ipv4: Vec::new(),
+            ipv6: Vec::new(),
+        }
+    }
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct IpLocationRangeByIp {
-    pub ipv4: Vec<IpLocationRange>,
-    pub ipv6: Vec<IpLocationRange>,
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpAsnRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub by_asn: HashMap<u32, Arc<IpAsnRangeByIp<T>>>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct IpLocationRanges {
-    pub by_country: HashMap<String, Arc<IpLocationRangeByIp>>,
-    pub by_continent: HashMap<String, Arc<IpLocationRangeByIp>>,
+impl<T> Default for IpAsnRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    fn default() -> Self {
+        Self {
+            by_asn: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpLocationRangeByIp<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub ipv4: Vec<IpLocationRange<T>>,
+    pub ipv6: Vec<IpLocationRange<T>>,
+}
+
+impl<T> Default for IpLocationRangeByIp<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    fn default() -> Self {
+        Self {
+            ipv4: Vec::new(),
+            ipv6: Vec::new(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct IpLocationRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub by_country: HashMap<String, Arc<IpLocationRangeByIp<T>>>,
+    pub by_continent: HashMap<String, Arc<IpLocationRangeByIp<T>>>,
+}
+
+impl<T> Default for IpLocationRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    fn default() -> Self {
+        Self {
+            by_country: HashMap::new(),
+            by_continent: HashMap::new(),
+        }
+    }
 }
 
 pub async fn save_data<T>(
@@ -188,13 +285,16 @@ pub async fn save_data<T>(
     set_name: Option<&str>,
 ) -> Result<(), AppError>
 where
-    T: Serialize + BaseIpRange,
+    T: BaseIpRange + Serialize + Clone,
 {
     tokio::fs::write(path, output.format(data, set_name).to_string()).await?;
     Ok(())
 }
 
-impl IpLocationRanges {
+impl<T> IpLocationRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Serialize,
+{
     pub async fn save(&self, config: &IplistConfig) -> Result<(), AppError> {
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
         for (country, ranges) in &self.by_country {
@@ -298,72 +398,68 @@ impl IpLocationRanges {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct IpRanges {
-    pub location_ranges: IpLocationRanges,
-    pub asn_ranges: IpAsnRanges,
+pub struct IpRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
+    pub location_ranges: IpLocationRanges<T>,
+    pub asn_ranges: IpAsnRanges<T>,
     pub locations: Arc<Vec<Location>>,
 }
 
-impl IpRanges {
+impl<T> IpRanges<T>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+{
     pub fn new(
-        location_ranges: Vec<IpLocationRange>,
-        asn_ranges: Vec<IpAsnRange>,
+        location_ranges: Vec<IpLocationRange<T>>,
+        asn_ranges: Vec<IpAsnRange<T>>,
         locations: Vec<Location>,
     ) -> Self {
-        let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
-        let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp<T>> =
+            HashMap::new();
+        let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp<T>> =
+            HashMap::new();
         for range in location_ranges {
-            match (range.start.is_ipv4(), range.end.is_ipv4()) {
-                (true, true) => {
-                    location_ranges_by_country
-                        .entry(range.location.country_alpha2.clone())
-                        .or_default()
-                        .ipv4
-                        .push(range.clone());
-                    location_ranges_by_continent
-                        .entry(range.location.continent.clone())
-                        .or_default()
-                        .ipv4
-                        .push(range);
-                }
-                (false, false) => {
-                    location_ranges_by_country
-                        .entry(range.location.country_alpha2.clone())
-                        .or_default()
-                        .ipv6
-                        .push(range.clone());
-                    location_ranges_by_continent
-                        .entry(range.location.continent.clone())
-                        .or_default()
-                        .ipv6
-                        .push(range);
-                }
-                _ => {
-                    warn!("unexpected IP range: {:?}", range);
-                }
+            if range.network.is_ipv4() {
+                location_ranges_by_country
+                    .entry(range.location.country_alpha2.clone())
+                    .or_default()
+                    .ipv4
+                    .push(range.clone());
+                location_ranges_by_continent
+                    .entry(range.location.continent.clone())
+                    .or_default()
+                    .ipv4
+                    .push(range);
+            } else {
+                location_ranges_by_country
+                    .entry(range.location.country_alpha2.clone())
+                    .or_default()
+                    .ipv6
+                    .push(range.clone());
+                location_ranges_by_continent
+                    .entry(range.location.continent.clone())
+                    .or_default()
+                    .ipv6
+                    .push(range);
             }
         }
 
-        let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
+        let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp<T>> = HashMap::new();
         for range in &asn_ranges {
-            match (range.start.is_ipv4(), range.end.is_ipv4()) {
-                (true, true) => {
-                    asn_ranges_by_asn
-                        .entry(range.asn)
-                        .or_default()
-                        .ipv4
-                        .push(range.clone());
-                }
-                (false, false) => {
-                    asn_ranges_by_asn
-                        .entry(range.asn)
-                        .or_default()
-                        .ipv6
-                        .push(range.clone());
-                }
-                _ => {
-                    warn!("unexpected IP range: {:?}", range);
-                }
+            if range.network.is_ipv4() {
+                asn_ranges_by_asn
+                    .entry(range.asn)
+                    .or_default()
+                    .ipv4
+                    .push(range.clone());
+            } else {
+                asn_ranges_by_asn
+                    .entry(range.asn)
+                    .or_default()
+                    .ipv6
+                    .push(range.clone());
             }
         }
         info!(
@@ -396,7 +492,7 @@ impl IpRanges {
     pub async fn get_by_continent(
         &self,
         continent: &str,
-    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
+    ) -> Result<Arc<IpLocationRangeByIp<T>>, AppError> {
         let Some(ranges) = self.location_ranges.by_continent.get(continent) else {
             return Ok(Arc::new(IpLocationRangeByIp::default()));
         };
@@ -406,14 +502,14 @@ impl IpRanges {
     pub async fn get_by_country(
         &self,
         country_alpha2: &str,
-    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
+    ) -> Result<Arc<IpLocationRangeByIp<T>>, AppError> {
         let Some(ranges) = self.location_ranges.by_country.get(country_alpha2) else {
             return Ok(Arc::new(IpLocationRangeByIp::default()));
         };
         Ok(ranges.clone())
     }
 
-    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp>, AppError> {
+    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp<T>>, AppError> {
         let Some(ranges) = self.asn_ranges.by_asn.get(asn) else {
             return Ok(Arc::new(IpAsnRangeByIp::default()));
         };
@@ -421,7 +517,10 @@ impl IpRanges {
     }
 }
 
-pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
+pub async fn generate_ranges<T>(config: &IplistConfig) -> Result<IpRanges<T>, AppError>
+where
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Serialize,
+{
     let locations = Location::load(config)?;
     let location_ranges = IpLocationRange::parse(config, &locations).await?;
     let asn_ranges = IpAsnRange::parse(config).await?;

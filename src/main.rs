@@ -9,6 +9,7 @@ use axum::routing::get;
 use axum::{Router, http, middleware};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
+use ipnetwork::IpNetwork;
 use log::{debug, error, info};
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
@@ -32,6 +33,7 @@ pub mod error;
 pub mod forms;
 pub mod handlers;
 pub mod iplist;
+pub mod iptools;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -48,7 +50,7 @@ struct Cli {
 
 pub struct AppState {
     pub config: AppConfig,
-    pub ip_ranges: RwLock<IpRanges>,
+    pub ip_ranges: RwLock<IpRanges<IpNetwork>>,
     pub blocklist_ranges: RwLock<BlocklistRanges>,
     pub users: HashMap<String, String>,
 }

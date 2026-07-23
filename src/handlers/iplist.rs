@@ -7,6 +7,7 @@ use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByI
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
+use ipnetwork::IpNetwork;
 use itertools::Itertools;
 use std::sync::Arc;
 
@@ -34,9 +35,9 @@ pub async fn get_all_continents(
 }
 
 fn get_ips_by_version(
-    ips: Arc<IpLocationRangeByIp>,
+    ips: Arc<IpLocationRangeByIp<IpNetwork>>,
     form: &IpListFormByCountry,
-) -> Vec<IpLocationRange> {
+) -> Vec<IpLocationRange<IpNetwork>> {
     match form.version {
         Some(IpVersion::Ipv4) => ips.ipv4.clone(),
         Some(IpVersion::Ipv6) => ips.ipv6.clone(),

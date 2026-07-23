@@ -1,9 +1,17 @@
 use std::fmt::Display;
+use std::hash::Hash;
 
-use crate::iplist::iprange::BaseIpRange;
+use crate::iplist::iprange::{BaseIpRange, IpLocationRange};
+use crate::iptools::network::{ListNetwork, NetworkType};
 use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
+
+pub trait GetNetworkType {
+    type T: ListNetwork;
+
+    fn network_type(&self) -> NetworkType<Self::T>;
+}
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -17,12 +25,12 @@ pub enum OutputFormat {
 impl OutputFormat {
     pub fn format<T>(&self, data: &[T], set_name: Option<&str>) -> FormattedOutput
     where
-        T: Serialize + BaseIpRange,
+        T: BaseIpRange + Serialize + Clone,
     {
         match self {
             OutputFormat::Text => FormattedOutput::new(
                 data.iter()
-                    .map(|ip| format!("{}-{}", ip.start(), ip.end()))
+                    .map(|ip| ip.network_type().network_string())
                     .collect::<Vec<_>>()
                     .join("\n"),
                 OutputFormat::Text,
@@ -51,11 +59,11 @@ impl OutputFormat {
                 let mut ipv4: bool = false;
                 let mut ipv6: bool = false;
                 for ip in data {
-                    if ip.start().is_ipv4() && ip.end().is_ipv4() {
-                        output.push_str(&format!("\t\t{}-{},\n", ip.start(), ip.end()));
+                    if ip.network_type().is_ipv4() {
+                        output.push_str(&format!("\t\t{},\n", ip.network_type().network_string()));
                         ipv4 = true;
                     } else {
-                        output6.push_str(&format!("\t\t{}-{},\n", ip.start(), ip.end()));
+                        output6.push_str(&format!("\t\t{},\n", ip.network_type().network_string()));
                         ipv6 = true;
                     }
                 }

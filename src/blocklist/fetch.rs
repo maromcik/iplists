@@ -1,6 +1,6 @@
 use crate::blocklist::config::BlocklistConfig;
-use crate::blocklist::network::{ListNetwork, NetworkType};
 use crate::error::AppError;
+use crate::iptools::network::{ListNetwork, NetworkType};
 use ipnetwork::{Ipv4Network, Ipv6Network};
 use log::{debug, error, warn};
 use std::fmt::Display;
