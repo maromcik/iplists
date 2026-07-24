@@ -1,12 +1,9 @@
 use axum::{extract::Request, http::header, middleware::Next, response::IntoResponse};
-use serde::Serialize;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::AppState;
 use crate::error::AppError;
-use crate::iptools::network::ListNetwork;
 
 /// Maps an API token to the username it belongs to.
 pub type Users = HashMap<String, String>;
@@ -21,7 +18,7 @@ pub type Users = HashMap<String, String>;
 /// bob:another-secret-token
 /// ```
 ///
-/// If `path` is `None`, authentication is disabled and an empty map is returned.
+/// If no `auth_token_file_path` is configured, authentication is disabled and an empty map is returned.
 pub async fn load_users(path: &Option<String>) -> Result<Users, AppError> {
     match path {
         None => Ok(Users::new()),
@@ -70,14 +67,11 @@ pub async fn load_users(path: &Option<String>) -> Result<Users, AppError> {
 /// `Authorization: Bearer <token>` or `Authorization: <token>`.
 ///
 /// If no `auth_token_file_path` is configured, all requests are allowed.
-pub async fn auth_middleware<T>(
-    state: axum::extract::State<Arc<AppState<T>>>,
+pub async fn auth_middleware(
+    state: axum::extract::State<Arc<AppState>>,
     request: Request,
     next: Next,
-) -> Result<impl IntoResponse, AppError>
-where
-    T: ListNetwork + Clone + Eq + PartialEq + Serialize + Hash + Send + Sync,
-{
+) -> Result<impl IntoResponse, AppError> {
     if state.config.auth_token_file_path.is_none() {
         return Ok(next.run(request).await);
     }

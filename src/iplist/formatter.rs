@@ -1,16 +1,10 @@
 use std::fmt::Display;
 
 use crate::iplist::iprange::BaseIpRange;
-use crate::iptools::network::{ListNetwork, NetworkType};
+use crate::iptools::network::ListNetwork;
 use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
-
-pub trait GetNetworkType {
-    type T: ListNetwork;
-
-    fn network_type(&self) -> NetworkType<Self::T>;
-}
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -59,10 +53,10 @@ impl OutputFormat {
                 let mut ipv6: bool = false;
                 for ip in data {
                     if ip.network_type().is_ipv4() {
-                        output.push_str(&format!("\t\t{},\n", ip.network_type().network_string()));
+                        output.push_str(&format!("\t\t{},\n", ip.network_type()));
                         ipv4 = true;
                     } else {
-                        output6.push_str(&format!("\t\t{},\n", ip.network_type().network_string()));
+                        output6.push_str(&format!("\t\t{},\n", ip.network_type()));
                         ipv6 = true;
                     }
                 }

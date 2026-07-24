@@ -1,16 +1,13 @@
 use std::{
     collections::HashMap,
-    io::Cursor,
     time::{Duration, SystemTime},
 };
 
-use flate2::read::GzDecoder;
 use log::{debug, info};
-use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
 
-use crate::error::AppError;
+use crate::{error::AppError, iplist::parse::Parser};
 
 pub struct Downloader<'a> {
     uri: &'a str,
@@ -101,26 +98,5 @@ impl Saver {
         file.write_all(&self.body).await?;
         info!("data saved to {path}");
         Ok(Parser { body: self.body })
-    }
-}
-
-pub struct Parser {
-    body: Vec<u8>,
-}
-
-impl Parser {
-    pub async fn parse<T: Serialize + for<'a> Deserialize<'a>>(&self) -> Result<Vec<T>, AppError> {
-        let cursor = Cursor::new(&self.body);
-        let decoder = GzDecoder::new(cursor);
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .from_reader(decoder);
-        let mut data = Vec::new();
-        for record in reader.deserialize() {
-            let range: T = record?;
-            data.push(range);
-        }
-        debug!("data parsed");
-        Ok(data)
     }
 }
