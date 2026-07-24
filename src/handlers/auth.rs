@@ -1,9 +1,12 @@
 use axum::{extract::Request, http::header, middleware::Next, response::IntoResponse};
+use serde::Serialize;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::AppState;
 use crate::error::AppError;
+use crate::iptools::network::ListNetwork;
 
 /// Maps an API token to the username it belongs to.
 pub type Users = HashMap<String, String>;
@@ -67,11 +70,14 @@ pub async fn load_users(path: &Option<String>) -> Result<Users, AppError> {
 /// `Authorization: Bearer <token>` or `Authorization: <token>`.
 ///
 /// If no `auth_token_file_path` is configured, all requests are allowed.
-pub async fn auth_middleware(
-    state: axum::extract::State<Arc<AppState>>,
+pub async fn auth_middleware<T>(
+    state: axum::extract::State<Arc<AppState<T>>>,
     request: Request,
     next: Next,
-) -> Result<impl IntoResponse, AppError> {
+) -> Result<impl IntoResponse, AppError>
+where
+    T: ListNetwork + Clone + Eq + PartialEq + Serialize + Hash + Send + Sync,
+{
     if state.config.auth_token_file_path.is_none() {
         return Ok(next.run(request).await);
     }

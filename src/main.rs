@@ -3,6 +3,7 @@ use crate::error::AppError;
 use crate::handlers::auth::{auth_middleware, load_users};
 use crate::handlers::iplist::{get_all_continents, get_all_countries, get_by_asn, get_by_location};
 use crate::iplist::iprange::{IpRanges, generate_ranges};
+use crate::iptools::network::ListNetwork;
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -11,7 +12,9 @@ use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use ipnetwork::IpNetwork;
 use log::{debug, error, info};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -48,14 +51,20 @@ struct Cli {
     config: String,
 }
 
-pub struct AppState {
+pub struct AppState<T>
+where
+    T: ListNetwork + Clone + Eq + PartialEq + Serialize + Hash + Send + Sync,
+{
     pub config: AppConfig,
-    pub ip_ranges: RwLock<IpRanges<IpNetwork>>,
+    pub ip_ranges: RwLock<IpRanges<T>>,
     pub blocklist_ranges: RwLock<BlocklistRanges>,
     pub users: HashMap<String, String>,
 }
 
-impl AppState {
+impl<T> AppState<T>
+where
+    T: ListNetwork + Clone + Eq + PartialEq + Serialize + Hash + Send + Sync,
+{
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let ip_ranges = generate_ranges(&config.iplist).await?;
         let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
@@ -90,7 +99,7 @@ async fn main() -> Result<(), AppError> {
         .with_env_filter(env)
         .init();
 
-    let state = AppState::new(config.clone()).await?;
+    let state: Arc<AppState<IpNetwork>> = AppState::new(config.clone()).await?;
     schedule_tasks(state.clone(), &config).await?;
 
     let api_routes = Router::new()
@@ -190,7 +199,10 @@ async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>,
     Ok(hostnames)
 }
 
-async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), AppError> {
+async fn schedule_tasks<T>(state: Arc<AppState<T>>, config: &AppConfig) -> Result<(), AppError>
+where
+    T: ListNetwork + Clone + Eq + PartialEq + Serialize + Hash + Send + Sync + 'static,
+{
     let scheduler = JobScheduler::new().await?;
     let config_local = config.iplist.clone();
     let state_local = state.clone();

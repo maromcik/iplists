@@ -69,7 +69,7 @@ impl IpLocationRangeOnly {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRange<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub network: NetworkType<T>,
     pub location: Location,
@@ -77,7 +77,7 @@ where
 
 impl<T> BaseIpRange for IpLocationRange<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     type Network = T;
 
@@ -88,7 +88,7 @@ where
 
 impl<T> IpLocationRange<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub async fn parse(
         config: &IplistConfig,
@@ -167,7 +167,7 @@ where
 
 impl<T> BaseIpRange for IpAsnRange<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     type Network = T;
 
@@ -178,7 +178,7 @@ where
 
 impl<T> IpAsnRange<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange<T>>, AppError> {
         let filename = "ip-asn.csv.gz";
@@ -213,7 +213,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpAsnRangeByIp<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub ipv4: Vec<IpAsnRange<T>>,
     pub ipv6: Vec<IpAsnRange<T>>,
@@ -221,7 +221,7 @@ where
 
 impl<T> Default for IpAsnRangeByIp<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     fn default() -> Self {
         Self {
@@ -234,14 +234,14 @@ where
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpAsnRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub by_asn: HashMap<u32, Arc<IpAsnRangeByIp<T>>>,
 }
 
 impl<T> Default for IpAsnRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     fn default() -> Self {
         Self {
@@ -253,7 +253,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRangeByIp<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub ipv4: Vec<IpLocationRange<T>>,
     pub ipv6: Vec<IpLocationRange<T>>,
@@ -261,7 +261,7 @@ where
 
 impl<T> Default for IpLocationRangeByIp<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     fn default() -> Self {
         Self {
@@ -274,7 +274,7 @@ where
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub by_country: HashMap<String, Arc<IpLocationRangeByIp<T>>>,
     pub by_continent: HashMap<String, Arc<IpLocationRangeByIp<T>>>,
@@ -282,7 +282,7 @@ where
 
 impl<T> Default for IpLocationRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     fn default() -> Self {
         Self {
@@ -307,7 +307,7 @@ where
 
 impl<T> IpLocationRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Serialize,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Serialize + Send,
 {
     pub async fn save(&self, config: &IplistConfig) -> Result<(), AppError> {
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
@@ -414,7 +414,7 @@ where
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub location_ranges: IpLocationRanges<T>,
     pub asn_ranges: IpAsnRanges<T>,
@@ -423,7 +423,7 @@ where
 
 impl<T> IpRanges<T>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Send,
 {
     pub fn new(
         location_ranges: Vec<IpLocationRange<T>>,
@@ -533,7 +533,7 @@ where
 
 pub async fn generate_ranges<T>(config: &IplistConfig) -> Result<IpRanges<T>, AppError>
 where
-    T: ListNetwork + Clone + Debug + Eq + PartialEq + Hash + Serialize,
+    T: ListNetwork + Clone + Debug + Eq + PartialEq + Serialize + Hash + Send,
 {
     let locations = Location::load(config)?;
     let location_ranges = IpLocationRange::parse(config, &locations).await?;
