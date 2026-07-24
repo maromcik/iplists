@@ -112,7 +112,7 @@ async fn fetch_blocklist(
         }
     }
 
-    let body = req.send().await?.text().await?;
+    let body = req.send().await?.error_for_status()?.text().await?;
 
     let blocklist = parse_from_string::<&str>(body.trim(), config.split_string.as_deref());
 
