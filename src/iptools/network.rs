@@ -209,17 +209,11 @@ impl ListNetwork for IpAddr {
     }
 
     fn is_ipv4(&self) -> bool {
-        match self {
-            IpAddr::V4(_) => true,
-            IpAddr::V6(_) => false,
-        }
+        self.is_ipv4()
     }
 
     fn is_ipv6(&self) -> bool {
-        match self {
-            IpAddr::V4(_) => false,
-            IpAddr::V6(_) => true,
-        }
+        self.is_ipv6()
     }
 
     fn from_ip_addr(ip: IpAddr) -> Option<Self> {

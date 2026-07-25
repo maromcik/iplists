@@ -46,13 +46,15 @@ impl<'a> Downloader<'a> {
 pub struct Loader {
     pub folder: String,
     pub filename: String,
+    pub max_age: std::time::Duration,
 }
 
 impl Loader {
-    pub fn new(folder: &str, filename: &str) -> Self {
+    pub fn new(folder: &str, filename: &str, max_age: std::time::Duration) -> Self {
         Self {
             folder: folder.to_string(),
             filename: filename.to_string(),
+            max_age,
         }
     }
 
@@ -71,14 +73,15 @@ impl Loader {
         let current = SystemTime::now();
         if current
             > file_time
-                .checked_add(Duration::from_hours(24))
+                .checked_add(self.max_age)
                 .ok_or(AppError::DataFileLoadError(
                     "could not increment time to compare downloaded file age".to_string(),
                 ))?
         {
-            return Err(AppError::DataFileLoadError(
-                "downloaded file is older than 24 hours".to_string(),
-            ));
+            return Err(AppError::DataFileLoadError(format!(
+                "downloaded file is older than the max age: {:?}",
+                self.max_age
+            )));
         }
         let body = tokio::fs::read(&path).await?;
         info!("loaded file: {}", path);

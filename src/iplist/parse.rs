@@ -64,7 +64,10 @@ pub struct IpLocationRangeOnly {
 impl IpLocationRangeOnly {
     pub async fn download(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
         let filename = "ip-location.csv.gz";
-        let parser = match Loader::new(&config.output_folder, filename).load().await {
+        let parser = match Loader::new(&config.output_folder, filename, config.max_age)
+            .load()
+            .await
+        {
             Ok(parser) => parser,
             Err(AppError::DataFileLoadError(e)) => {
                 warn!("re-downloading file; cause: {}", e);
@@ -144,7 +147,10 @@ impl From<IpAsnRangeOnly> for IpAsnRange {
 impl IpAsnRangeOnly {
     pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
         let filename = "ip-asn.csv.gz";
-        let parser = match Loader::new(&config.output_folder, filename).load().await {
+        let parser = match Loader::new(&config.output_folder, filename, config.max_age)
+            .load()
+            .await
+        {
             Ok(parser) => parser,
             Err(AppError::DataFileLoadError(e)) => {
                 warn!("re-downloading file; cause: {}", e);

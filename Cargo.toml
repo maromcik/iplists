@@ -1,6 +1,6 @@
 [package]
 name = "iplists"
-version = "1.6.0"
+version = "1.6.1"
 edition = "2024"
 
 [dependencies]
@@ -30,3 +30,4 @@ strfmt = "0.2.5"
 tokio-cron-scheduler = "0.15.1"
 bytes = "1.11.0"
 tracing-appender = "0.2.5"
+humantime-serde = "1.1.1"

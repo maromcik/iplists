@@ -75,7 +75,9 @@ async fn main() -> Result<(), AppError> {
 
     let config = AppConfig::parse_config(&cli.config)?;
 
-    let env = EnvFilter::new(format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str());
+    let env = EnvFilter::new(
+        format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str(),
+    );
     debug!("Using config: {:?}", config);
 
     let timer = tracing_subscriber::fmt::time::LocalTime::rfc_3339();

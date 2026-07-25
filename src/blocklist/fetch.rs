@@ -5,7 +5,6 @@ use ipnetwork::{Ipv4Network, Ipv6Network};
 use log::{debug, error, warn};
 use std::fmt::Display;
 use std::str::FromStr;
-use std::time::Duration;
 use tokio::fs::DirEntry;
 
 #[derive(Default, Debug)]
@@ -100,9 +99,7 @@ async fn fetch_blocklist(
     config: &BlocklistConfig,
     endpoint: &str,
 ) -> Result<Vec<String>, AppError> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(config.timeout))
-        .build()?;
+    let client = reqwest::Client::builder().timeout(config.timeout).build()?;
 
     let mut req = client.get(endpoint);
 
