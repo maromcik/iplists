@@ -145,12 +145,14 @@ pub async fn geo_location(
 
     let result = match (location, asn) {
         (Some(location), None) => CombinedIpRange::new(
+            form.ip,
             location.network.network(),
             0,
             "".to_string(),
             location.location.clone(),
         ),
         (Some(location), Some(asn)) => CombinedIpRange::new(
+            form.ip,
             location.network.network(),
             asn.asn,
             asn.isp.clone(),
