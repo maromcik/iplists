@@ -1,5 +1,6 @@
 use crate::iplist::formatter::OutputFormat;
 use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
+use crate::iptools::iptrie::deduplicate;
 use crate::iptools::network::{ListNetwork, NetworkType};
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
@@ -291,9 +292,77 @@ impl IpRanges {
 
 pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
     let locations = Location::load(config)?;
-    let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
-    let asn_ranges = IpAsnRangeOnly::parse(config).await?;
+    let location_ranges = deduplicate(IpLocationRangeOnly::parse(config, &locations).await?);
+    let asn_ranges = deduplicate(IpAsnRangeOnly::parse(config).await?);
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
+}
+
+impl ListNetwork for IpAsnRange {
+    fn address(&self) -> std::net::IpAddr {
+        self.network.address()
+    }
+
+    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
+        self.network.bit_network_addr()
+    }
+
+    fn network_prefix(&self) -> u8 {
+        self.network.network_prefix()
+    }
+
+    fn max_prefix(&self) -> u8 {
+        self.network.max_prefix()
+    }
+
+    fn network_string(&self) -> String {
+        self.network.network_string()
+    }
+
+    fn is_network(&self) -> bool {
+        self.network.is_network()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        self.network.is_ipv4()
+    }
+
+    fn is_ipv6(&self) -> bool {
+        self.network.is_ipv6()
+    }
+}
+
+impl ListNetwork for IpLocationRange {
+    fn address(&self) -> std::net::IpAddr {
+        self.network.address()
+    }
+
+    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
+        self.network.bit_network_addr()
+    }
+
+    fn network_prefix(&self) -> u8 {
+        self.network.network_prefix()
+    }
+
+    fn max_prefix(&self) -> u8 {
+        self.network.max_prefix()
+    }
+
+    fn network_string(&self) -> String {
+        self.network.network_string()
+    }
+
+    fn is_network(&self) -> bool {
+        self.network.is_network()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        self.network.is_ipv4()
+    }
+
+    fn is_ipv6(&self) -> bool {
+        self.network.is_ipv6()
+    }
 }

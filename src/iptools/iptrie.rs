@@ -1,4 +1,4 @@
-use crate::iptools::network::{ListNetwork, NetworkType};
+use crate::iptools::network::ListNetwork;
 
 /// Represents a generic IP address in either IPv4 or IPv6 format using numeric representations.
 #[allow(dead_code)]
@@ -141,17 +141,13 @@ impl TrieNode {
 /// # Time Complexity
 /// -   `O(h * n * logn)`: Sorting the IPs contributes `n * logn`, and inserting into the trie has
 ///     a height-dependent complexity of `h`, which is 32 for IPv4 and 128 for IPv6.
-pub fn deduplicate<T>(ips: Vec<NetworkType<T>>) -> Vec<NetworkType<T>>
+pub fn deduplicate<T>(ips: Vec<T>) -> Vec<T>
 where
     T: ListNetwork,
 {
-    let mut ranges = Vec::new();
     let mut networks = Vec::new();
     for ip_type in ips {
-        match &ip_type {
-            NetworkType::Subnet(_) => networks.push(ip_type),
-            NetworkType::Range(_, _) => ranges.push(ip_type),
-        }
+        networks.push(ip_type);
     }
     networks.sort_by_key(ListNetwork::network_prefix);
     let mut root = TrieNode::new();
@@ -161,6 +157,5 @@ where
             result.push(ip);
         }
     }
-    result.extend(ranges);
     result
 }
