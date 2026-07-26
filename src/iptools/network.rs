@@ -15,7 +15,7 @@ pub trait ListNetwork: Clone + Debug {
     fn bit_network_addr(&self) -> BitIp;
     fn network_prefix(&self) -> u8;
     fn max_prefix(&self) -> u8;
-    fn network_string(&self) -> String;
+    fn addr_string(&self) -> String;
     fn is_network(&self) -> bool;
     fn is_ipv4(&self) -> bool;
     fn is_ipv6(&self) -> bool;
@@ -35,7 +35,7 @@ where
     T: ListNetwork + Clone + Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.network_string())
+        write!(f, "{}", self.addr_string())
     }
 }
 
@@ -71,9 +71,9 @@ where
         }
     }
 
-    fn network_string(&self) -> String {
+    fn addr_string(&self) -> String {
         match self {
-            NetworkType::Subnet(net) => net.network_string(),
+            NetworkType::Subnet(net) => net.addr_string(),
             NetworkType::Range(net1, net2) => {
                 format!("{}-{}", net1.address(), net2.address())
             }
@@ -128,8 +128,8 @@ impl ListNetwork for Ipv4Network {
         32
     }
 
-    fn network_string(&self) -> String {
-        self.network().to_string()
+    fn addr_string(&self) -> String {
+        self.to_string()
     }
 
     fn is_network(&self) -> bool {
@@ -163,8 +163,8 @@ impl ListNetwork for Ipv6Network {
         128
     }
 
-    fn network_string(&self) -> String {
-        self.network().to_string()
+    fn addr_string(&self) -> String {
+        self.to_string()
     }
 
     fn is_network(&self) -> bool {
@@ -201,7 +201,7 @@ impl ListNetwork for IpAddr {
         }
     }
 
-    fn network_string(&self) -> String {
+    fn addr_string(&self) -> String {
         match self {
             IpAddr::V4(ip) => ip.to_string(),
             IpAddr::V6(ip) => ip.to_string(),
@@ -253,10 +253,10 @@ impl ListNetwork for IpNetwork {
         }
     }
 
-    fn network_string(&self) -> String {
+    fn addr_string(&self) -> String {
         match self {
-            IpNetwork::V4(net) => net.network_string(),
-            IpNetwork::V6(net) => net.network_string(),
+            IpNetwork::V4(net) => net.to_string(),
+            IpNetwork::V6(net) => net.to_string(),
         }
     }
 
@@ -311,10 +311,10 @@ impl ListNetwork for IpNet {
         }
     }
 
-    fn network_string(&self) -> String {
+    fn addr_string(&self) -> String {
         match self {
-            IpNet::V4(net) => net.network_string(),
-            IpNet::V6(net) => net.network_string(),
+            IpNet::V4(net) => net.to_string(),
+            IpNet::V6(net) => net.to_string(),
         }
     }
 
@@ -342,7 +342,7 @@ impl ListNetwork for IpNet {
 
 impl ListNetwork for Ipv4Net {
     fn address(&self) -> IpAddr {
-        IpAddr::V4(self.addr().into())
+        IpAddr::V4(self.addr())
     }
 
     fn bit_network_addr(&self) -> BitIp {
@@ -365,8 +365,8 @@ impl ListNetwork for Ipv4Net {
         32
     }
 
-    fn network_string(&self) -> String {
-        self.network().to_string()
+    fn addr_string(&self) -> String {
+        self.to_string()
     }
 
     fn is_network(&self) -> bool {
@@ -400,8 +400,8 @@ impl ListNetwork for Ipv6Net {
         128
     }
 
-    fn network_string(&self) -> String {
-        self.network().to_string()
+    fn addr_string(&self) -> String {
+        self.to_string()
     }
 
     fn is_network(&self) -> bool {

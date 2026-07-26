@@ -1,6 +1,6 @@
 use crate::iplist::formatter::OutputFormat;
 use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
-use crate::iptools::iptrie::deduplicate;
+use crate::iptools::iptrie::{IPTrie, deduplicate};
 use crate::iptools::network::{ListNetwork, NetworkType};
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
@@ -178,10 +178,24 @@ impl IpLocationRanges {
     }
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
+pub struct IPTrieLocationRanges {
+    pub ipv4: IPTrie<IpLocationRange>,
+    pub ipv6: IPTrie<IpLocationRange>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IPTrieAsnRanges {
+    pub ipv4: IPTrie<IpAsnRange>,
+    pub ipv6: IPTrie<IpAsnRange>,
+}
+
+#[derive(Clone)]
 pub struct IpRanges {
     pub location_ranges: IpLocationRanges,
     pub asn_ranges: IpAsnRanges,
+    pub trie_location_ranges: IPTrieLocationRanges,
+    pub trie_asn_ranges: IPTrieAsnRanges,
     pub locations: Arc<Vec<Location>>,
 }
 
@@ -193,46 +207,58 @@ impl IpRanges {
     ) -> Self {
         let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
         let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        let mut ipv4_trie_location = IPTrie::new();
+        let mut ipv6_trie_location = IPTrie::new();
         for range in location_ranges {
             if range.network.is_ipv4() {
-                location_ranges_by_country
-                    .entry(range.location.country_alpha2.clone())
-                    .or_default()
-                    .ipv4
-                    .push(range.clone());
-                location_ranges_by_continent
-                    .entry(range.location.continent.clone())
-                    .or_default()
-                    .ipv4
-                    .push(range);
+                if ipv4_trie_location.insert(&range) {
+                    location_ranges_by_country
+                        .entry(range.location.country_alpha2.clone())
+                        .or_default()
+                        .ipv4
+                        .push(range.clone());
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv4
+                        .push(range);
+                }
             } else {
-                location_ranges_by_country
-                    .entry(range.location.country_alpha2.clone())
-                    .or_default()
-                    .ipv6
-                    .push(range.clone());
-                location_ranges_by_continent
-                    .entry(range.location.continent.clone())
-                    .or_default()
-                    .ipv6
-                    .push(range);
+                if ipv6_trie_location.insert(&range) {
+                    location_ranges_by_country
+                        .entry(range.location.country_alpha2.clone())
+                        .or_default()
+                        .ipv6
+                        .push(range.clone());
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv6
+                        .push(range);
+                }
             }
         }
 
+        let mut ipv4_trie_asn = IPTrie::new();
+        let mut ipv6_trie_asn = IPTrie::new();
         let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
         for range in &asn_ranges {
             if range.network.is_ipv4() {
-                asn_ranges_by_asn
-                    .entry(range.asn)
-                    .or_default()
-                    .ipv4
-                    .push(range.clone());
+                if ipv4_trie_asn.insert(range) {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv4
+                        .push(range.clone());
+                }
             } else {
-                asn_ranges_by_asn
-                    .entry(range.asn)
-                    .or_default()
-                    .ipv6
-                    .push(range.clone());
+                if ipv6_trie_asn.insert(range) {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv6
+                        .push(range.clone());
+                }
             }
         }
         info!(
@@ -257,6 +283,14 @@ impl IpRanges {
                     .into_iter()
                     .map(|(k, v)| (k, Arc::new(v)))
                     .collect(),
+            },
+            trie_location_ranges: IPTrieLocationRanges {
+                ipv4: ipv4_trie_location,
+                ipv6: ipv6_trie_location,
+            },
+            trie_asn_ranges: IPTrieAsnRanges {
+                ipv4: ipv4_trie_asn,
+                ipv6: ipv6_trie_asn,
             },
             locations: Arc::new(locations),
         }
@@ -292,7 +326,16 @@ impl IpRanges {
 
 pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
     let locations = Location::load(config)?;
-    let location_ranges = deduplicate(IpLocationRangeOnly::parse(config, &locations).await?);
+    let location_ranges = deduplicate(
+        IpLocationRangeOnly::parse(config, &locations)
+            .await?
+            .into_iter()
+            .filter(|r| r.is_ipv4())
+            .collect::<Vec<_>>(),
+    );
+    let trie = crate::iptools::iptrie::build(location_ranges.clone());
+    let x = trie.lookup("147.251.6.10".parse().unwrap());
+    println!("{:?}", x);
     let asn_ranges = deduplicate(IpAsnRangeOnly::parse(config).await?);
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
@@ -316,8 +359,8 @@ impl ListNetwork for IpAsnRange {
         self.network.max_prefix()
     }
 
-    fn network_string(&self) -> String {
-        self.network.network_string()
+    fn addr_string(&self) -> String {
+        self.network.addr_string()
     }
 
     fn is_network(&self) -> bool {
@@ -350,8 +393,8 @@ impl ListNetwork for IpLocationRange {
         self.network.max_prefix()
     }
 
-    fn network_string(&self) -> String {
-        self.network.network_string()
+    fn addr_string(&self) -> String {
+        self.network.addr_string()
     }
 
     fn is_network(&self) -> bool {

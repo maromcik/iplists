@@ -1,7 +1,9 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::handlers::auth::{auth_middleware, load_users};
-use crate::handlers::iplist::{get_all_continents, get_all_countries, get_by_asn, get_by_location};
+use crate::handlers::iplist::{
+    geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
+};
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
@@ -33,6 +35,7 @@ pub mod forms;
 pub mod handlers;
 pub mod iplist;
 pub mod iptools;
+pub mod models;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -98,6 +101,7 @@ async fn main() -> Result<(), AppError> {
         .route("/iplist/location", get(get_by_location))
         .route("/iplist/asn", get(get_by_asn))
         .route("/blocklist", get(get_blocklist))
+        .route("/iplist/geo", get(geo_location))
         .with_state(state.clone());
 
     let app = Router::new()

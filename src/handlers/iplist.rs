@@ -2,12 +2,14 @@ use crate::AppState;
 use crate::error::AppError;
 use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
-use crate::forms::iplist::{IpListFormByAsn, IpListFormByCountry};
+use crate::forms::iplist::{ApiGeoLocation, IpListFormByAsn, IpListFormByCountry};
 use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByIp};
+use crate::models::iprange::CombinedIpRange;
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
 use itertools::Itertools;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 pub async fn get_all_countries(
@@ -122,4 +124,39 @@ pub async fn get_by_asn(
         .format
         .format(&ips, form.asn.map(|asn| format!("asn{}", asn)).as_deref());
     Ok(formatted)
+}
+
+pub async fn geo_location(
+    State(state): State<Arc<AppState>>,
+    AppQuery(form): AppQuery<ApiGeoLocation>,
+) -> Result<impl IntoResponse, AppError> {
+    let readguard = state.ip_ranges.read().await;
+    let (location, asn) = match form.ip {
+        IpAddr::V4(_) => (
+            readguard.trie_location_ranges.ipv4.lookup(form.ip),
+            readguard.trie_asn_ranges.ipv4.lookup(form.ip),
+        ),
+        IpAddr::V6(_) => (
+            readguard.trie_location_ranges.ipv6.lookup(form.ip),
+            readguard.trie_asn_ranges.ipv6.lookup(form.ip),
+        ),
+    };
+
+    let result = match (location, asn) {
+        (Some(location), None) => CombinedIpRange::new(
+            location.network.clone(),
+            0,
+            "".to_string(),
+            location.location.clone(),
+        ),
+        (Some(location), Some(asn)) => CombinedIpRange::new(
+            location.network.clone(),
+            asn.asn,
+            asn.isp.clone(),
+            location.location.clone(),
+        ),
+        _ => return Err(AppError::NotFound("No location found".to_string())),
+    };
+
+    Ok(Json(result))
 }

@@ -23,7 +23,7 @@ impl OutputFormat {
         match self {
             OutputFormat::Text => FormattedOutput::new(
                 data.iter()
-                    .map(|ip| ip.network_type().network_string())
+                    .map(|ip| ip.network_type().addr_string())
                     .collect::<Vec<_>>()
                     .join("\n"),
                 OutputFormat::Text,

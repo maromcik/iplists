@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use serde::Deserialize;
 
 use crate::{forms::IpVersion, iplist::formatter::OutputFormat};
@@ -22,4 +24,9 @@ pub struct IpListFormByAsn {
     pub format: OutputFormat,
     #[serde(default)]
     pub version: Option<IpVersion>,
+}
+
+#[derive(Debug, Deserialize, Eq, PartialEq)]
+pub struct ApiGeoLocation {
+    pub ip: IpAddr,
 }
