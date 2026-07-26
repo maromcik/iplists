@@ -37,14 +37,14 @@ impl OutputFormat {
                 let mut output6 = String::new();
                 output.push_str(
                     format!(
-                        "set {}_ipv4 {{ \n\ttype ipv4_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
+                        "\nset {}_ipv4 {{ \n\ttype ipv4_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
                 );
                 output6.push_str(
                     format!(
-                        "set {}_ipv6 {{ \n\ttype ipv6_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
+                        "\nset {}_ipv6 {{ \n\ttype ipv6_addr\n\tcounter\n\tflags interval\n\tauto-merge\n\telements = {{\n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
@@ -60,8 +60,8 @@ impl OutputFormat {
                         ipv6 = true;
                     }
                 }
-                output.push_str("\t}\n}");
-                output6.push_str("\t}\n}");
+                output.push_str("\t}\n}\n\n");
+                output6.push_str("\t}\n}\n\n");
                 let output = match (ipv4, ipv6) {
                     (true, true) => {
                         output.push('\n');

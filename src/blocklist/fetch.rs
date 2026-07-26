@@ -1,5 +1,6 @@
 use crate::blocklist::config::BlocklistConfig;
 use crate::error::AppError;
+use crate::iptools::iptrie::deduplicate;
 use crate::iptools::network::{ListNetwork, NetworkType};
 use ipnetwork::{Ipv4Network, Ipv6Network};
 use log::{debug, error, warn};
@@ -40,6 +41,10 @@ impl BlocklistRanges {
 
         let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, None);
         let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, None);
+
+        let ipv4 = deduplicate(ipv4);
+        let ipv6 = deduplicate(ipv6);
+
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
@@ -143,7 +148,7 @@ where
         match ip.parse::<T>() {
             Ok(parsed_ip) => {
                 if parsed_ip.is_network() {
-                    parsed.push(NetworkType::Ip(parsed_ip));
+                    parsed.push(NetworkType::Subnet(parsed_ip));
                 } else {
                     warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
                 }

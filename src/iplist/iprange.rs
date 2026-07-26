@@ -2,7 +2,7 @@ use crate::iplist::formatter::OutputFormat;
 use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
 use crate::iptools::network::{ListNetwork, NetworkType};
 use crate::{error::AppError, iplist::config::IplistConfig};
-use ipnetwork::IpNetwork;
+use ipnet::IpNet;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,30 +10,30 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 pub trait BaseIpRange {
-    fn network_type(&self) -> &NetworkType<IpNetwork>;
+    fn network_type(&self) -> &NetworkType<IpNet>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRange {
-    pub network: NetworkType<IpNetwork>,
+    pub network: NetworkType<IpNet>,
     pub location: Location,
 }
 
 impl BaseIpRange for IpLocationRange {
-    fn network_type(&self) -> &NetworkType<IpNetwork> {
+    fn network_type(&self) -> &NetworkType<IpNet> {
         &self.network
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct IpAsnRange {
-    pub network: NetworkType<IpNetwork>,
+    pub network: NetworkType<IpNet>,
     pub asn: u32,
     pub isp: String,
 }
 
 impl BaseIpRange for IpAsnRange {
-    fn network_type(&self) -> &NetworkType<IpNetwork> {
+    fn network_type(&self) -> &NetworkType<IpNet> {
         &self.network
     }
 }

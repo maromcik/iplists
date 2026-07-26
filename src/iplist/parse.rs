@@ -1,7 +1,6 @@
 use std::{collections::HashMap, io::Cursor, net::IpAddr, time::Instant};
 
 use flate2::read::GzDecoder;
-use ipnetwork::IpNetwork;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +11,7 @@ use crate::{
         fetch::{Downloader, Loader},
         iprange::{IpAsnRange, IpLocationRange},
     },
-    iptools::network::{ListNetwork, NetworkType},
+    iptools::network::NetworkType,
 };
 
 pub struct Parser {
@@ -101,16 +100,31 @@ impl IpLocationRangeOnly {
         let mut parsed_ranges = Vec::new();
         for range in ranges {
             if let Some(location) = location_map.get(&range.country_alpha2) {
-                let start = IpNetwork::from_ip_addr(range.start).ok_or_else(|| {
-                    AppError::ParseError(format!("unsupported start IP: {}", range.start))
-                })?;
-                let end = IpNetwork::from_ip_addr(range.end).ok_or_else(|| {
-                    AppError::ParseError(format!("unsupported end IP: {}", range.end))
-                })?;
-                parsed_ranges.push(IpLocationRange {
-                    network: NetworkType::Range(start, end),
-                    location: (*location).to_owned(),
-                });
+                // let start = IpNetwork::from_ip_addr(range.start).ok_or_else(|| {
+                //     AppError::ParseError(format!("unsupported start IP: {}", range.start))
+                // })?;
+                // let end = IpNetwork::from_ip_addr(range.end).ok_or_else(|| {
+                //     AppError::ParseError(format!("unsupported end IP: {}", range.end))
+                // })?;
+
+                let ipnet_range = match (range.start, range.end) {
+                    (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
+                        ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
+                    }
+                    (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
+                        ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
+                    }
+                    _ => {
+                        continue;
+                    }
+                };
+
+                for subnet in ipnet_range {
+                    parsed_ranges.push(IpLocationRange {
+                        network: NetworkType::Subnet(subnet),
+                        location: (*location).to_owned(),
+                    });
+                }
             }
         }
         info!(
@@ -129,19 +143,6 @@ pub struct IpAsnRangeOnly {
     pub end: IpAddr,
     pub asn: u32,
     pub isp: String,
-}
-
-impl From<IpAsnRangeOnly> for IpAsnRange {
-    fn from(r: IpAsnRangeOnly) -> Self {
-        IpAsnRange {
-            network: NetworkType::Range(
-                IpNetwork::from_ip_addr(r.start).expect("unsupported start IP"),
-                IpNetwork::from_ip_addr(r.end).expect("unsupported end IP"),
-            ),
-            asn: r.asn,
-            isp: r.isp,
-        }
-    }
 }
 
 impl IpAsnRangeOnly {
@@ -166,11 +167,31 @@ impl IpAsnRangeOnly {
         };
 
         let ranges: Vec<IpAsnRangeOnly> = parser.parse().await?;
+        let mut parsed_ranges = Vec::new();
+        for range in ranges {
+            let ipnet_range = match (range.start, range.end) {
+                (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
+                    ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
+                }
+                (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
+                    ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
+                }
+                _ => {
+                    continue;
+                }
+            };
 
-        let processed_ranges: Vec<IpAsnRange> = ranges.into_iter().map(IpAsnRange::from).collect();
+            for subnet in ipnet_range {
+                parsed_ranges.push(IpAsnRange {
+                    network: NetworkType::Subnet(subnet),
+                    asn: range.asn,
+                    isp: range.isp.clone(),
+                });
+            }
+        }
 
-        info!("parsed {} ASN IP ranges", processed_ranges.len(),);
+        info!("parsed {} ASN IP ranges", parsed_ranges.len(),);
 
-        Ok(processed_ranges)
+        Ok(parsed_ranges)
     }
 }

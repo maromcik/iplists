@@ -31,3 +31,4 @@ tokio-cron-scheduler = "0.15.1"
 bytes = "1.11.0"
 tracing-appender = "0.2.5"
 humantime-serde = "1.1.1"
+ipnet = { version = "2.12.0", features = ["std", "serde", "json"] }
