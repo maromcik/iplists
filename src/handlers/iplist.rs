@@ -4,6 +4,7 @@ use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
 use crate::forms::iplist::{ApiGeoLocation, IpListFormByAsn, IpListFormByCountry};
 use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByIp};
+use crate::iptools::network::ListNetwork;
 use crate::models::iprange::CombinedIpRange;
 use axum::Json;
 use axum::extract::State;
@@ -144,13 +145,13 @@ pub async fn geo_location(
 
     let result = match (location, asn) {
         (Some(location), None) => CombinedIpRange::new(
-            location.network.clone(),
+            location.network.network(),
             0,
             "".to_string(),
             location.location.clone(),
         ),
         (Some(location), Some(asn)) => CombinedIpRange::new(
-            location.network.clone(),
+            location.network.network(),
             asn.asn,
             asn.isp.clone(),
             location.location.clone(),

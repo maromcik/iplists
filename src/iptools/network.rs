@@ -1,5 +1,4 @@
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
-use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
@@ -11,6 +10,7 @@ use crate::iptools::iptrie::BitIp;
 /// Trait that defines a generic abstraction for representing network-related operations on IPv4 and IPv6 subnets.
 /// This trait is implemented for `Ipv4Network` and `Ipv6Network`.
 pub trait ListNetwork: Clone + Debug {
+    fn network(&self) -> IpNet;
     fn address(&self) -> IpAddr;
     fn bit_network_addr(&self) -> BitIp;
     fn network_prefix(&self) -> u8;
@@ -43,6 +43,13 @@ impl<T> ListNetwork for NetworkType<T>
 where
     T: ListNetwork + Clone + Debug,
 {
+    fn network(&self) -> IpNet {
+        match self {
+            NetworkType::Subnet(net) => net.network(),
+            NetworkType::Range(net1, _) => net1.network(),
+        }
+    }
+
     fn address(&self) -> IpAddr {
         match self {
             NetworkType::Subnet(net) => net.address(),
@@ -101,78 +108,11 @@ where
         }
     }
 }
-
-/// Implementation of the `BlockListNetwork` trait for IPv4 networks (`Ipv4Network`).
-impl ListNetwork for Ipv4Network {
-    fn address(&self) -> IpAddr {
-        IpAddr::V4(self.ip())
-    }
-
-    fn bit_network_addr(&self) -> BitIp {
-        BitIp::Ipv4(self.network().to_bits())
-    }
-
-    fn is_ipv4(&self) -> bool {
-        true
-    }
-
-    fn is_ipv6(&self) -> bool {
-        false
-    }
-
-    fn network_prefix(&self) -> u8 {
-        self.prefix()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        32
-    }
-
-    fn addr_string(&self) -> String {
-        self.to_string()
-    }
-
-    fn is_network(&self) -> bool {
-        self.network() == self.ip()
-    }
-}
-
-/// Implementation of the `BlockListNetwork` trait for IPv6 networks (`Ipv6Network`).
-impl ListNetwork for Ipv6Network {
-    fn address(&self) -> IpAddr {
-        IpAddr::V6(self.ip())
-    }
-
-    fn bit_network_addr(&self) -> BitIp {
-        BitIp::Ipv6(self.network().to_bits())
-    }
-
-    fn is_ipv4(&self) -> bool {
-        false
-    }
-
-    fn is_ipv6(&self) -> bool {
-        true
-    }
-
-    fn network_prefix(&self) -> u8 {
-        self.prefix()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        128
-    }
-
-    fn addr_string(&self) -> String {
-        self.to_string()
-    }
-
-    fn is_network(&self) -> bool {
-        self.network() == self.ip()
-    }
-}
-
 impl ListNetwork for IpAddr {
+    fn network(&self) -> IpNet {
+        IpNet::new(*self, self.max_prefix()).expect("Invalid network")
+    }
+
     fn address(&self) -> IpAddr {
         match self {
             IpAddr::V4(ip) => IpAddr::V4(*ip),
@@ -224,65 +164,11 @@ impl ListNetwork for IpAddr {
     }
 }
 
-impl ListNetwork for IpNetwork {
-    fn address(&self) -> IpAddr {
-        match self {
-            IpNetwork::V4(net) => net.address(),
-            IpNetwork::V6(net) => net.address(),
-        }
-    }
-
-    fn bit_network_addr(&self) -> BitIp {
-        match self {
-            IpNetwork::V4(net) => net.bit_network_addr(),
-            IpNetwork::V6(net) => net.bit_network_addr(),
-        }
-    }
-
-    fn network_prefix(&self) -> u8 {
-        match self {
-            IpNetwork::V4(net) => net.network_prefix(),
-            IpNetwork::V6(net) => net.network_prefix(),
-        }
-    }
-
-    fn max_prefix(&self) -> u8 {
-        match self {
-            IpNetwork::V4(net) => net.max_prefix(),
-            IpNetwork::V6(net) => net.max_prefix(),
-        }
-    }
-
-    fn addr_string(&self) -> String {
-        match self {
-            IpNetwork::V4(net) => net.to_string(),
-            IpNetwork::V6(net) => net.to_string(),
-        }
-    }
-
-    fn is_network(&self) -> bool {
-        match self {
-            IpNetwork::V4(net) => net.is_network(),
-            IpNetwork::V6(net) => net.is_network(),
-        }
-    }
-
-    fn is_ipv4(&self) -> bool {
-        match self {
-            IpNetwork::V4(_) => true,
-            IpNetwork::V6(_) => false,
-        }
-    }
-
-    fn is_ipv6(&self) -> bool {
-        match self {
-            IpNetwork::V4(_) => false,
-            IpNetwork::V6(_) => true,
-        }
-    }
-}
-
 impl ListNetwork for IpNet {
+    fn network(&self) -> IpNet {
+        self.clone()
+    }
+
     fn address(&self) -> IpAddr {
         match self {
             IpNet::V4(net) => net.address(),
@@ -341,6 +227,10 @@ impl ListNetwork for IpNet {
 }
 
 impl ListNetwork for Ipv4Net {
+    fn network(&self) -> IpNet {
+        IpNet::V4(*self)
+    }
+
     fn address(&self) -> IpAddr {
         IpAddr::V4(self.addr())
     }
@@ -376,6 +266,10 @@ impl ListNetwork for Ipv4Net {
 
 /// Implementation of the `BlockListNetwork` trait for IPv6 networks (`Ipv6Network`).
 impl ListNetwork for Ipv6Net {
+    fn network(&self) -> IpNet {
+        IpNet::V6(*self)
+    }
+
     fn address(&self) -> IpAddr {
         IpAddr::V6(self.addr())
     }

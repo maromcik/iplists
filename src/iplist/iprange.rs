@@ -343,6 +343,10 @@ pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError
 }
 
 impl ListNetwork for IpAsnRange {
+    fn network(&self) -> IpNet {
+        self.network.network()
+    }
+
     fn address(&self) -> std::net::IpAddr {
         self.network.address()
     }
@@ -377,6 +381,10 @@ impl ListNetwork for IpAsnRange {
 }
 
 impl ListNetwork for IpLocationRange {
+    fn network(&self) -> IpNet {
+        self.network.network()
+    }
+
     fn address(&self) -> std::net::IpAddr {
         self.network.address()
     }

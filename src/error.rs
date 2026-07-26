@@ -95,6 +95,12 @@ impl From<std::net::AddrParseError> for AppError {
     }
 }
 
+impl From<ipnet::AddrParseError> for AppError {
+    fn from(value: ipnet::AddrParseError) -> Self {
+        Self::ParseError(value.to_string())
+    }
+}
+
 impl From<ipnetwork::IpNetworkError> for AppError {
     fn from(value: ipnetwork::IpNetworkError) -> Self {
         Self::ParseError(value.to_string())
