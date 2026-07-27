@@ -9,6 +9,10 @@ fn default_max_age() -> std::time::Duration {
     std::time::Duration::from_hours(24)
 }
 
+fn default_split_ranges() -> bool {
+    true
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IplistConfig {
     pub country_uri: String,
@@ -24,4 +28,6 @@ pub struct IplistConfig {
     pub location_path: String,
     pub output_folder: String,
     pub download_cron: String,
+    #[serde(default = "default_split_ranges")]
+    pub split_ranges: bool,
 }

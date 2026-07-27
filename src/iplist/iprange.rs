@@ -1,6 +1,6 @@
 use crate::iplist::formatter::OutputFormat;
 use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
-use crate::iptools::iptrie::{IPTrie, deduplicate};
+use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::{ListNetwork, NetworkType};
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
@@ -326,17 +326,8 @@ impl IpRanges {
 
 pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
     let locations = Location::load(config)?;
-    let location_ranges = deduplicate(
-        IpLocationRangeOnly::parse(config, &locations)
-            .await?
-            .into_iter()
-            .filter(|r| r.is_ipv4())
-            .collect::<Vec<_>>(),
-    );
-    let trie = crate::iptools::iptrie::build(location_ranges.clone());
-    let x = trie.lookup("147.251.6.10".parse().unwrap());
-    println!("{:?}", x);
-    let asn_ranges = deduplicate(IpAsnRangeOnly::parse(config).await?);
+    let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
+    let asn_ranges = IpAsnRangeOnly::parse(config).await?;
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
