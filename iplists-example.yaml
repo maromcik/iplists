@@ -13,6 +13,8 @@ iplist:
    location_path: static/lists/location.csv
    output_folder: static/lists
    download_cron: "0 0 * * * *"
+   # must be true in order for Geo location to work
+   # split_ranges: false
 blocklist:
    ipv4_url: https://blocklist
    ipv6_url: https://blocklist

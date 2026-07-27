@@ -166,7 +166,7 @@ impl ListNetwork for IpAddr {
 
 impl ListNetwork for IpNet {
     fn network(&self) -> IpNet {
-        self.clone()
+        *self
     }
 
     fn address(&self) -> IpAddr {

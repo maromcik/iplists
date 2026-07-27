@@ -201,6 +201,7 @@ pub struct IpRanges {
 
 impl IpRanges {
     pub fn new(
+        config: &IplistConfig,
         location_ranges: Vec<IpLocationRange>,
         asn_ranges: Vec<IpAsnRange>,
         locations: Vec<Location>,
@@ -211,7 +212,7 @@ impl IpRanges {
         let mut ipv6_trie_location = IPTrie::new();
         for range in location_ranges {
             if range.network.is_ipv4() {
-                if ipv4_trie_location.insert(&range) {
+                if !config.split_ranges || ipv4_trie_location.insert(&range) {
                     location_ranges_by_country
                         .entry(range.location.country_alpha2.clone())
                         .or_default()
@@ -224,7 +225,7 @@ impl IpRanges {
                         .push(range);
                 }
             } else {
-                if ipv6_trie_location.insert(&range) {
+                if !config.split_ranges || ipv6_trie_location.insert(&range) {
                     location_ranges_by_country
                         .entry(range.location.country_alpha2.clone())
                         .or_default()
@@ -244,7 +245,7 @@ impl IpRanges {
         let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
         for range in &asn_ranges {
             if range.network.is_ipv4() {
-                if ipv4_trie_asn.insert(range) {
+                if !config.split_ranges || ipv4_trie_asn.insert(range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
@@ -252,7 +253,7 @@ impl IpRanges {
                         .push(range.clone());
                 }
             } else {
-                if ipv6_trie_asn.insert(range) {
+                if !config.split_ranges || ipv6_trie_asn.insert(range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
@@ -328,7 +329,7 @@ pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError
     let locations = Location::load(config)?;
     let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
     let asn_ranges = IpAsnRangeOnly::parse(config).await?;
-    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
+    let ip_ranges = IpRanges::new(config, location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
 }

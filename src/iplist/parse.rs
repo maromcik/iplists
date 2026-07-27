@@ -100,28 +100,28 @@ impl IpLocationRangeOnly {
         let mut parsed_ranges = Vec::new();
         for range in ranges {
             if let Some(location) = location_map.get(&range.country_alpha2) {
-                // let start = IpNetwork::from_ip_addr(range.start).ok_or_else(|| {
-                //     AppError::ParseError(format!("unsupported start IP: {}", range.start))
-                // })?;
-                // let end = IpNetwork::from_ip_addr(range.end).ok_or_else(|| {
-                //     AppError::ParseError(format!("unsupported end IP: {}", range.end))
-                // })?;
+                if config.split_ranges {
+                    let ipnet_range = match (range.start, range.end) {
+                        (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
+                            ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
+                        }
+                        (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
+                            ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
+                        }
+                        _ => {
+                            continue;
+                        }
+                    };
 
-                let ipnet_range = match (range.start, range.end) {
-                    (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
-                        ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
+                    for subnet in ipnet_range {
+                        parsed_ranges.push(IpLocationRange {
+                            network: NetworkType::Subnet(subnet),
+                            location: (*location).to_owned(),
+                        });
                     }
-                    (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
-                        ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
-                    }
-                    _ => {
-                        continue;
-                    }
-                };
-
-                for subnet in ipnet_range {
+                } else {
                     parsed_ranges.push(IpLocationRange {
-                        network: NetworkType::Subnet(subnet),
+                        network: NetworkType::Range(range.start.into(), range.end.into()),
                         location: (*location).to_owned(),
                     });
                 }
@@ -169,21 +169,29 @@ impl IpAsnRangeOnly {
         let ranges: Vec<IpAsnRangeOnly> = parser.parse().await?;
         let mut parsed_ranges = Vec::new();
         for range in ranges {
-            let ipnet_range = match (range.start, range.end) {
-                (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
-                    ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
-                }
-                (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
-                    ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
-                }
-                _ => {
-                    continue;
-                }
-            };
+            if config.split_ranges {
+                let ipnet_range = match (range.start, range.end) {
+                    (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
+                        ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
+                    }
+                    (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
+                        ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
+                    }
+                    _ => {
+                        continue;
+                    }
+                };
 
-            for subnet in ipnet_range {
+                for subnet in ipnet_range {
+                    parsed_ranges.push(IpAsnRange {
+                        network: NetworkType::Subnet(subnet),
+                        asn: range.asn,
+                        isp: range.isp.clone(),
+                    });
+                }
+            } else {
                 parsed_ranges.push(IpAsnRange {
-                    network: NetworkType::Subnet(subnet),
+                    network: NetworkType::Range(range.start.into(), range.end.into()),
                     asn: range.asn,
                     isp: range.isp.clone(),
                 });
