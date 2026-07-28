@@ -63,12 +63,12 @@
         <i class="fas fa-magnifying-glass mr-2"></i>API Lookup
     </h3>
 
-    <form class="mb-6 flex gap-4" on:submit|preventDefault={searchIp}>
+    <form class="mb-6 flex flex-col sm:flex-row gap-4" on:submit|preventDefault={searchIp}>
         <input
             type="text"
             bind:value={ipInput}
             placeholder="Enter IP address (e.g. 2001:718:801:406::99)"
-            class="flex-grow p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
+            class="flex-grow min-w-0 p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
         />
         <button
             type="submit"
