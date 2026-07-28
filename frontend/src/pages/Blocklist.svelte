@@ -87,8 +87,8 @@
                         <a href={apiUrl} target="_blank" class="hover:underline flex-grow">
                             {apiUrl}
                         </a>
-                        <button 
-                            on:click={() => copyUrl(apiUrl)} 
+                        <button
+                            on:click={() => copyUrl(apiUrl)}
                             class="text-white bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
                         >
                             {copiedUrl === apiUrl ? "Copied!" : "Copy"}

@@ -1,6 +1,5 @@
 use crate::config::AppConfig;
 use crate::error::AppError;
-use crate::handlers::auth::{auth_middleware, load_users};
 use crate::handlers::iplist::{
     geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
@@ -8,11 +7,11 @@ use crate::iplist::iprange::{IpRanges, generate_ranges};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
-use axum::{Router, http, middleware};
+use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use log::{debug, error, info};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -54,20 +53,17 @@ pub struct AppState {
     pub config: AppConfig,
     pub ip_ranges: RwLock<IpRanges>,
     pub blocklist_ranges: RwLock<BlocklistRanges>,
-    pub users: HashMap<String, String>,
 }
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let ip_ranges = generate_ranges(&config.iplist).await?;
         let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
-        let users = load_users(&config.auth_token_file_path).await?;
 
         Ok(Arc::new(Self {
             config,
             ip_ranges: RwLock::new(ip_ranges),
             blocklist_ranges: RwLock::new(blocklist_ranges),
-            users,
         }))
     }
 }
@@ -110,10 +106,6 @@ async fn main() -> Result<(), AppError> {
         )
         .nest_service("/lists", ServeDir::new("lists"))
         .nest("/api", api_routes)
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            auth_middleware,
-        ))
         .nest_service("/static", ServeDir::new("static"))
         .layer(
             TraceLayer::new_for_http()

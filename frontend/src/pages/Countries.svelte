@@ -38,7 +38,7 @@
     {:else}
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {#each countries as country}
-                <button 
+                <button
                     class="bg-cards text-gray-900 dark:text-gray-100 p-4 rounded-xl shadow-sm hover:shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
                     on:click={() => selectCountry(country)}>
                     <i class="fas fa-flag mr-2"></i>{country.name} ({country.alpha2})

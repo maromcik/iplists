@@ -1,15 +1,7 @@
 import { get } from 'svelte/store';
-import { token } from './store';
 import { AppErrorKind, type ApiError } from './types';
 
-export function getAuthToken(): string {
-    return get(token);
-}
 
-export function getAuthHeaders(): Record<string, string> {
-    const t = getAuthToken();
-    return t ? { Authorization: `Bearer ${t}` } : {};
-}
 
 export class ApiRequestError extends Error {
     response: ApiError;
@@ -76,7 +68,6 @@ export async function apiFetch(url: string, init: RequestInit = {}): Promise<Res
     return fetch(url, {
         ...init,
         headers: {
-            ...getAuthHeaders(),
             ...(init.headers || {}),
         },
     });

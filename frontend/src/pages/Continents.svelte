@@ -38,7 +38,7 @@
     {:else}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {#each continents as continent}
-                <button 
+                <button
                     class="bg-cards p-6 rounded-xl shadow-sm text-gray-900 dark:text-gray-100 font-medium hover:shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
                     on:click={() => selectContinent(continent)}>
                     <i class="fas fa-globe mr-2"></i>{continent}
