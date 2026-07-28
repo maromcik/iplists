@@ -202,14 +202,18 @@ pub struct IpRanges {
 impl IpRanges {
     pub fn new(
         config: &IplistConfig,
-        location_ranges: Vec<IpLocationRange>,
-        asn_ranges: Vec<IpAsnRange>,
+        mut location_ranges: Vec<IpLocationRange>,
+        mut asn_ranges: Vec<IpAsnRange>,
         locations: Vec<Location>,
     ) -> Self {
         let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
         let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
         let mut ipv4_trie_location = IPTrie::new();
         let mut ipv6_trie_location = IPTrie::new();
+
+        location_ranges.sort_by_key(ListNetwork::network_prefix);
+        asn_ranges.sort_by_key(ListNetwork::network_prefix);
+
         for range in location_ranges {
             if range.network.is_ipv4() {
                 if !config.split_ranges || ipv4_trie_location.insert(&range) {

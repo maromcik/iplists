@@ -6,8 +6,10 @@
 	import AsnDetail from "./pages/AsnDetail.svelte";
 	import Blocklist from "./pages/Blocklist.svelte";
 	import LocationDetail from "./pages/LocationDetail.svelte";
+	import IpLookup from "./pages/IpLookup.svelte";
 
 	const navItems = [
+		{ label: "Lookup", 		path: "/lookup" },
 		{ label: "Countries", 	path: "/countries" },
 		{ label: "Continents", 	path: "/continents" },
 		{ label: "ASNs", 		path: "/asn" },
@@ -19,6 +21,7 @@
 
 <main class="bg-gray-50 dark:bg-gray-900 min-h-screen p-6 mt-12 flex flex-col items-center">
 	<Router>
+		<Route path="/lookup" component={IpLookup} />
 		<Route path="/countries" component={Countries} />
 		<Route path="/continents" component={Continents} />
 		<Route path="/asn" component={AsnDetail} />

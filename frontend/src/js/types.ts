@@ -47,3 +47,11 @@ export interface IpAsnRange {
     asn: number;
     isp: string;
 }
+
+export interface CombinedIpRange {
+    ip: string;
+    network: string;
+    asn: number;
+    isp: string;
+    location: Location;
+}
