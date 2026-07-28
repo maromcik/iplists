@@ -95,7 +95,7 @@
 <div class="w-full max-w-4xl mx-auto p-4">
     <h3 class="text-3xl font-bold mb-6 text-gray-900 dark:text-white">ASN Search</h3>
 
-    <div class="mb-6 flex gap-4">
+    <form class="mb-6 flex gap-4" on:submit|preventDefault={searchAsn}>
         <input
             type="number"
             bind:value={asnInput}
@@ -103,12 +103,14 @@
             class="flex-grow p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500"
         />
         <button
-            on:click={searchAsn}
-            class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg font-bold transition-colors"
+            type="submit"
+            disabled={loading || !asnInput}
+            class="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center gap-2"
         >
+            <i class="fas fa-magnifying-glass"></i>
             Search
         </button>
-    </div>
+    </form>
 
     {#if loading}
         <p class="text-gray-600 dark:text-gray-400">Loading ASN ranges…</p>
