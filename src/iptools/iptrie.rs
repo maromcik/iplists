@@ -1,6 +1,12 @@
 use crate::iptools::network::ListNetwork;
 use std::net::IpAddr;
 
+pub trait TrieNetwork {
+    fn bit_network_addr(&self) -> BitIp;
+    fn network_prefix(&self) -> u8;
+    fn max_prefix(&self) -> u8;
+}
+
 /// Represents a generic IP address in either IPv4 or IPv6 format using numeric representations.
 #[allow(dead_code)]
 pub enum BitIp {

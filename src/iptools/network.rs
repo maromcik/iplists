@@ -5,7 +5,10 @@ use std::{
     net::IpAddr,
 };
 
-use crate::iptools::iptrie::BitIp;
+use crate::{
+    iplist::iprange::{IpAsnRange, IpLocationRange},
+    iptools::iptrie::BitIp,
+};
 
 /// Trait that defines a generic abstraction for representing network-related operations on IPv4 and IPv6 subnets.
 /// This trait is implemented for `Ipv4Network` and `Ipv6Network`.
@@ -300,5 +303,81 @@ impl ListNetwork for Ipv6Net {
 
     fn is_network(&self) -> bool {
         self.network() == self.addr()
+    }
+}
+
+impl ListNetwork for IpAsnRange {
+    fn network(&self) -> IpNet {
+        self.network.network()
+    }
+
+    fn address(&self) -> std::net::IpAddr {
+        self.network.address()
+    }
+
+    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
+        self.network.bit_network_addr()
+    }
+
+    fn network_prefix(&self) -> u8 {
+        self.network.network_prefix()
+    }
+
+    fn max_prefix(&self) -> u8 {
+        self.network.max_prefix()
+    }
+
+    fn addr_string(&self) -> String {
+        self.network.addr_string()
+    }
+
+    fn is_network(&self) -> bool {
+        self.network.is_network()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        self.network.is_ipv4()
+    }
+
+    fn is_ipv6(&self) -> bool {
+        self.network.is_ipv6()
+    }
+}
+
+impl ListNetwork for IpLocationRange {
+    fn network(&self) -> IpNet {
+        self.network.network()
+    }
+
+    fn address(&self) -> std::net::IpAddr {
+        self.network.address()
+    }
+
+    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
+        self.network.bit_network_addr()
+    }
+
+    fn network_prefix(&self) -> u8 {
+        self.network.network_prefix()
+    }
+
+    fn max_prefix(&self) -> u8 {
+        self.network.max_prefix()
+    }
+
+    fn addr_string(&self) -> String {
+        self.network.addr_string()
+    }
+
+    fn is_network(&self) -> bool {
+        self.network.is_network()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        self.network.is_ipv4()
+    }
+
+    fn is_ipv6(&self) -> bool {
+        self.network.is_ipv6()
     }
 }
