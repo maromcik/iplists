@@ -4,6 +4,7 @@ use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
 use crate::forms::iplist::{ApiGeoLocation, IpListFormByAsn, IpListFormByCountry};
 use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByIp};
+use crate::iptools::iptrie::TrieKey;
 use crate::iptools::network::ListNetwork;
 use crate::models::iprange::CombinedIpRange;
 use axum::Json;
@@ -131,15 +132,16 @@ pub async fn geo_location(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<ApiGeoLocation>,
 ) -> Result<impl IntoResponse, AppError> {
+    let key = TrieKey::from(form.ip);
     let readguard = state.ip_ranges.read().await;
     let (location, asn) = match form.ip {
         IpAddr::V4(_) => (
-            readguard.trie_location_ranges.ipv4.lookup(form.ip),
-            readguard.trie_asn_ranges.ipv4.lookup(form.ip),
+            readguard.trie_location_ranges.ipv4.lookup(key),
+            readguard.trie_asn_ranges.ipv4.lookup(key),
         ),
         IpAddr::V6(_) => (
-            readguard.trie_location_ranges.ipv6.lookup(form.ip),
-            readguard.trie_asn_ranges.ipv6.lookup(form.ip),
+            readguard.trie_location_ranges.ipv6.lookup(key),
+            readguard.trie_asn_ranges.ipv6.lookup(key),
         ),
     };
 

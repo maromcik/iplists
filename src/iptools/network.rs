@@ -1,13 +1,14 @@
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::max,
     fmt::{Debug, Display},
     net::IpAddr,
 };
 
 use crate::{
     iplist::iprange::{IpAsnRange, IpLocationRange},
-    iptools::iptrie::BitIp,
+    iptools::iptrie::{BitIp, TrieKey},
 };
 
 /// Trait that defines a generic abstraction for representing network-related operations on IPv4 and IPv6 subnets.
@@ -15,9 +16,8 @@ use crate::{
 pub trait ListNetwork: Clone + Debug {
     fn network(&self) -> IpNet;
     fn address(&self) -> IpAddr;
-    fn bit_network_addr(&self) -> BitIp;
     fn network_prefix(&self) -> u8;
-    fn max_prefix(&self) -> u8;
+    fn trie_key(&self) -> Option<TrieKey>;
     fn addr_string(&self) -> String;
     fn is_network(&self) -> bool;
     fn is_ipv4(&self) -> bool;
@@ -60,24 +60,17 @@ where
         }
     }
 
-    fn bit_network_addr(&self) -> BitIp {
-        match self {
-            NetworkType::Subnet(net) => net.bit_network_addr(),
-            NetworkType::Range(net1, _) => net1.bit_network_addr(),
-        }
-    }
-
     fn network_prefix(&self) -> u8 {
         match self {
             NetworkType::Subnet(net) => net.network_prefix(),
-            NetworkType::Range(_, _) => self.max_prefix(),
+            NetworkType::Range(net1, net2) => max(net1.network_prefix(), net2.network_prefix()),
         }
     }
 
-    fn max_prefix(&self) -> u8 {
+    fn trie_key(&self) -> Option<TrieKey> {
         match self {
-            NetworkType::Subnet(net) => net.max_prefix(),
-            NetworkType::Range(net1, _) => net1.max_prefix(),
+            NetworkType::Subnet(net) => net.trie_key(),
+            NetworkType::Range(_, _) => None,
         }
     }
 
@@ -113,20 +106,17 @@ where
 }
 impl ListNetwork for IpAddr {
     fn network(&self) -> IpNet {
-        IpNet::new(*self, self.max_prefix()).expect("Invalid network")
+        let prefix = match self {
+            IpAddr::V4(_) => 32,
+            IpAddr::V6(_) => 128,
+        };
+        IpNet::new(*self, prefix).expect("Invalid network")
     }
 
     fn address(&self) -> IpAddr {
         match self {
             IpAddr::V4(ip) => IpAddr::V4(*ip),
             IpAddr::V6(ip) => IpAddr::V6(*ip),
-        }
-    }
-
-    fn bit_network_addr(&self) -> BitIp {
-        match self {
-            IpAddr::V4(ip) => BitIp::Ipv4(ip.to_bits()),
-            IpAddr::V6(ip) => BitIp::Ipv6(ip.to_bits()),
         }
     }
 
@@ -137,10 +127,10 @@ impl ListNetwork for IpAddr {
         }
     }
 
-    fn max_prefix(&self) -> u8 {
+    fn trie_key(&self) -> Option<TrieKey> {
         match self {
-            IpAddr::V4(_) => 32,
-            IpAddr::V6(_) => 128,
+            IpAddr::V4(ip) => Some(TrieKey::new(BitIp::Ipv4(ip.to_bits()), 32)),
+            IpAddr::V6(ip) => Some(TrieKey::new(BitIp::Ipv6(ip.to_bits()), 128)),
         }
     }
 
@@ -179,13 +169,6 @@ impl ListNetwork for IpNet {
         }
     }
 
-    fn bit_network_addr(&self) -> BitIp {
-        match self {
-            IpNet::V4(net) => net.bit_network_addr(),
-            IpNet::V6(net) => net.bit_network_addr(),
-        }
-    }
-
     fn network_prefix(&self) -> u8 {
         match self {
             IpNet::V4(net) => net.network_prefix(),
@@ -193,10 +176,10 @@ impl ListNetwork for IpNet {
         }
     }
 
-    fn max_prefix(&self) -> u8 {
+    fn trie_key(&self) -> Option<TrieKey> {
         match self {
-            IpNet::V4(net) => net.max_prefix(),
-            IpNet::V6(net) => net.max_prefix(),
+            IpNet::V4(net) => net.trie_key(),
+            IpNet::V6(net) => net.trie_key(),
         }
     }
 
@@ -238,8 +221,11 @@ impl ListNetwork for Ipv4Net {
         IpAddr::V4(self.addr())
     }
 
-    fn bit_network_addr(&self) -> BitIp {
-        BitIp::Ipv4(self.network().to_bits())
+    fn trie_key(&self) -> Option<TrieKey> {
+        Some(TrieKey::new(
+            BitIp::Ipv4(self.network().to_bits()),
+            self.network_prefix(),
+        ))
     }
 
     fn is_ipv4(&self) -> bool {
@@ -252,10 +238,6 @@ impl ListNetwork for Ipv4Net {
 
     fn network_prefix(&self) -> u8 {
         self.prefix_len()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        32
     }
 
     fn addr_string(&self) -> String {
@@ -277,8 +259,11 @@ impl ListNetwork for Ipv6Net {
         IpAddr::V6(self.addr())
     }
 
-    fn bit_network_addr(&self) -> BitIp {
-        BitIp::Ipv6(self.network().to_bits())
+    fn trie_key(&self) -> Option<TrieKey> {
+        Some(TrieKey::new(
+            BitIp::Ipv6(self.network().to_bits()),
+            self.network_prefix(),
+        ))
     }
 
     fn is_ipv4(&self) -> bool {
@@ -291,10 +276,6 @@ impl ListNetwork for Ipv6Net {
 
     fn network_prefix(&self) -> u8 {
         self.prefix_len()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        128
     }
 
     fn addr_string(&self) -> String {
@@ -315,16 +296,12 @@ impl ListNetwork for IpAsnRange {
         self.network.address()
     }
 
-    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
-        self.network.bit_network_addr()
+    fn trie_key(&self) -> Option<TrieKey> {
+        self.network.trie_key()
     }
 
     fn network_prefix(&self) -> u8 {
         self.network.network_prefix()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        self.network.max_prefix()
     }
 
     fn addr_string(&self) -> String {
@@ -353,16 +330,12 @@ impl ListNetwork for IpLocationRange {
         self.network.address()
     }
 
-    fn bit_network_addr(&self) -> crate::iptools::iptrie::BitIp {
-        self.network.bit_network_addr()
+    fn trie_key(&self) -> Option<TrieKey> {
+        self.network.trie_key()
     }
 
     fn network_prefix(&self) -> u8 {
         self.network.network_prefix()
-    }
-
-    fn max_prefix(&self) -> u8 {
-        self.network.max_prefix()
     }
 
     fn addr_string(&self) -> String {

@@ -1,14 +1,42 @@
-use crate::iptools::network::ListNetwork;
 use std::net::IpAddr;
 
-pub trait TrieNetwork {
-    fn bit_network_addr(&self) -> BitIp;
-    fn network_prefix(&self) -> u8;
-    fn max_prefix(&self) -> u8;
+use crate::iptools::network::ListNetwork;
+
+#[derive(Copy, Clone)]
+pub struct TrieKey {
+    pub addr: BitIp,
+    pub network_prefix: u8,
+}
+
+impl TrieKey {
+    pub fn new(addr: BitIp, network_prefix: u8) -> Self {
+        Self {
+            addr,
+            network_prefix,
+        }
+    }
+
+    /// Returns the i-th bit (from the MSB) of the key address.
+    pub fn bit(&self, i: u8) -> u8 {
+        let n = self.addr.max_prefix() - 1 - i;
+        self.addr.r_shift(n).b_and(1)
+    }
+}
+
+impl From<IpAddr> for TrieKey {
+    fn from(addr: IpAddr) -> Self {
+        let (bit_ip, prefix) = match addr {
+            IpAddr::V4(addr) => (BitIp::Ipv4(addr.to_bits()), 32),
+            IpAddr::V6(addr) => (BitIp::Ipv6(addr.to_bits()), 128),
+        };
+
+        Self::new(bit_ip, prefix)
+    }
 }
 
 /// Represents a generic IP address in either IPv4 or IPv6 format using numeric representations.
 #[allow(dead_code)]
+#[derive(Copy, Clone)]
 pub enum BitIp {
     Ipv4(u32),
     Ipv6(u128),
@@ -24,7 +52,7 @@ impl BitIp {
     ///
     /// # Returns
     /// The shifted `BitIp` instance.
-    fn r_shift(&self, n: u8) -> Self {
+    pub fn r_shift(&self, n: u8) -> Self {
         match self {
             BitIp::Ipv4(ip) => BitIp::Ipv4(*ip >> n),
             BitIp::Ipv6(ip) => BitIp::Ipv6(*ip >> n),
@@ -38,11 +66,30 @@ impl BitIp {
     ///
     /// # Returns
     /// The result of the operation as an 8-bit value.
-    fn b_and(self, rhs: u8) -> u8 {
+    pub fn b_and(self, rhs: u8) -> u8 {
         match self {
             BitIp::Ipv4(ip) => (ip & rhs as u32) as u8,
             BitIp::Ipv6(ip) => (ip & rhs as u128) as u8,
         }
+    }
+
+    /// Returns the maximum prefix length for the IP address.
+    ///
+    /// # Returns
+    /// The maximum prefix length as an `u8` value.
+    pub fn max_prefix(&self) -> u8 {
+        match self {
+            BitIp::Ipv4(_) => 32,
+            BitIp::Ipv6(_) => 128,
+        }
+    }
+
+    pub fn is_ipv4(&self) -> bool {
+        matches!(self, BitIp::Ipv4(_))
+    }
+
+    pub fn is_ipv6(&self) -> bool {
+        matches!(self, BitIp::Ipv6(_))
     }
 }
 
@@ -93,8 +140,10 @@ impl<T: ListNetwork> TrieNode<T> {
                 return false;
             }
 
-            let n = network.max_prefix() - 1 - i;
-            let bit = network.bit_network_addr().r_shift(n).b_and(1);
+            let Some(key) = network.trie_key() else {
+                return false;
+            };
+            let bit = key.bit(i);
             node = node.children[bit as usize].get_or_insert_with(|| Box::new(TrieNode::new()));
         }
 
@@ -112,28 +161,26 @@ impl<T: ListNetwork> TrieNode<T> {
     /// Looks up the network that contains the given host address.
     ///
     /// The address is treated as a single host (/32 for IPv4, /128 for IPv6).
-    fn lookup(&self, address: IpAddr) -> Option<&T> {
-        let bit_ip = address.bit_network_addr();
-        let max_prefix = address.max_prefix();
+    fn lookup(&self, address: TrieKey) -> Option<&T> {
+        let max_prefix = address.addr.max_prefix();
 
         let mut node = self;
         for i in 0..max_prefix {
             if let Some(ref value) = node.value {
-                return if value.is_ipv4() == address.is_ipv4() {
+                return if value.is_ipv4() == address.addr.is_ipv4() {
                     Some(value)
                 } else {
                     None
                 };
             }
 
-            let n = max_prefix - 1 - i;
-            let bit = bit_ip.r_shift(n).b_and(1);
+            let bit = address.bit(i);
             node = node.children[bit as usize].as_ref()?;
         }
 
         node.value
             .as_ref()
-            .filter(|&value| value.is_ipv4() == address.is_ipv4())
+            .filter(|&value| value.is_ipv4() == address.addr.is_ipv4())
     }
 }
 
@@ -166,7 +213,7 @@ impl<T: ListNetwork> IPTrie<T> {
     /// The address is interpreted as a single host (/32 for IPv4, /128 for IPv6). Returns
     /// a reference to the broadest matching network stored in the trie, or `None` if no
     /// network contains the address.
-    pub fn lookup(&self, address: IpAddr) -> Option<&T> {
+    pub fn lookup(&self, address: TrieKey) -> Option<&T> {
         self.root.lookup(address)
     }
 }
