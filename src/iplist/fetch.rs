@@ -69,7 +69,7 @@ impl Loader {
         }
     }
 
-    pub async fn load(&self) -> Result<Archive, AppError> {
+    pub async fn load(&self) -> Result<GeoData, AppError> {
         let path = format!("{}/download/{}", self.folder, self.filename);
         let file = tokio::fs::File::open(&path)
             .await
@@ -96,7 +96,7 @@ impl Loader {
         }
         let body = tokio::fs::read(&path).await?;
         info!("loaded file: {}", path);
-        Ok(Archive::new(body))
+        Ok(GeoData::new(body))
     }
 }
 
@@ -105,23 +105,23 @@ pub struct Saver {
 }
 
 impl Saver {
-    pub async fn save(self, folder: &str, filename: &str) -> Result<Archive, AppError> {
+    pub async fn save(self, folder: &str, filename: &str) -> Result<GeoData, AppError> {
         tokio::fs::create_dir_all(format!("{}/download", folder)).await?;
         let path = format!("{}/download/{}", folder, filename);
         let mut file = tokio::fs::File::create(&path).await?;
         file.write_all(&self.body).await?;
         info!("data saved to {path}");
-        Ok(Archive::new(self.body))
+        Ok(GeoData::new(self.body))
     }
 }
 
 /// A downloaded geo IP data archive (ZIP bytes). Provider-agnostic; the
 /// provider parser (see [`crate::iplist::parse`]) consumes it.
-pub struct Archive {
+pub struct GeoData {
     body: Vec<u8>,
 }
 
-impl Archive {
+impl GeoData {
     pub fn new(body: Vec<u8>) -> Self {
         Self { body }
     }

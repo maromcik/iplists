@@ -1,4 +1,4 @@
-use crate::iplist::formatter::OutputFormat;
+use crate::iplist::formatter::{OutputFormat, save_data};
 use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::ListNetwork;
 use crate::{error::AppError, iplist::config::IplistConfig};
@@ -10,10 +10,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::IpAddr;
 use std::sync::Arc;
-
-pub trait BaseIpRange {
-    fn network(&self) -> &IpNet;
-}
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Location {
@@ -45,23 +41,11 @@ pub struct IpLocationRange {
     pub location: Location,
 }
 
-impl BaseIpRange for IpLocationRange {
-    fn network(&self) -> &IpNet {
-        &self.network
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct IpAsnRange {
     pub network: IpNet,
     pub asn: u32,
     pub isp: String,
-}
-
-impl BaseIpRange for IpAsnRange {
-    fn network(&self) -> &IpNet {
-        &self.network
-    }
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -85,19 +69,6 @@ pub struct IpLocationRangeByIp {
 pub struct IpLocationRanges {
     pub by_country: HashMap<String, Arc<IpLocationRangeByIp>>,
     pub by_continent: HashMap<String, Arc<IpLocationRangeByIp>>,
-}
-
-pub async fn save_data<T>(
-    data: &[T],
-    output: OutputFormat,
-    path: &str,
-    set_name: Option<&str>,
-) -> Result<(), AppError>
-where
-    T: BaseIpRange + Serialize + Clone,
-{
-    tokio::fs::write(path, output.format(data, set_name).to_string()).await?;
-    Ok(())
 }
 
 impl IpLocationRanges {
@@ -353,8 +324,6 @@ impl IpRanges {
     }
 }
 
-/// Loads the full set of IP ranges using the given geo IP provider parser,
-/// e.g. [`crate::iplist::parse::MaxMindParser`].
 pub async fn generate_ranges<P>(config: &IplistConfig) -> Result<IpRanges, AppError>
 where
     P: LocationParser + AsnParser,

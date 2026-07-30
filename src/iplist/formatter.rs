@@ -1,10 +1,9 @@
-use std::fmt::Display;
-
-use crate::iplist::iprange::BaseIpRange;
+use crate::error::AppError;
 use crate::iptools::network::ListNetwork;
 use axum::http::{HeaderValue, header};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -18,12 +17,12 @@ pub enum OutputFormat {
 impl OutputFormat {
     pub fn format<T>(&self, data: &[T], set_name: Option<&str>) -> FormattedOutput
     where
-        T: BaseIpRange + Serialize + Clone,
+        T: ListNetwork + Serialize + Clone,
     {
         match self {
             OutputFormat::Text => FormattedOutput::new(
                 data.iter()
-                    .map(|ip| ip.network().addr_string())
+                    .map(|ip| ip.addr_string())
                     .collect::<Vec<_>>()
                     .join("\n"),
                 OutputFormat::Text,
@@ -112,4 +111,17 @@ impl IntoResponse for FormattedOutput {
             OutputFormat::Nftables => self.output.into_response(),
         }
     }
+}
+
+pub async fn save_data<T>(
+    data: &[T],
+    output: OutputFormat,
+    path: &str,
+    set_name: Option<&str>,
+) -> Result<(), AppError>
+where
+    T: ListNetwork + Serialize + Clone,
+{
+    tokio::fs::write(path, output.format(data, set_name).to_string()).await?;
+    Ok(())
 }

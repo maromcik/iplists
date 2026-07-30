@@ -11,16 +11,9 @@ use crate::{
     error::AppError,
     iplist::{
         config::IplistConfig,
-        fetch::{Archive, Downloader, Loader},
+        fetch::{Downloader, GeoData, Loader},
     },
 };
-
-/// Geo IP data source backed by the MaxMind GeoLite2 CSV exports.
-///
-/// Only this file knows about the MaxMind CSV layout (filenames inside the
-/// ZIP archives, column names, ...). Everything else consumes the canonical
-/// types through the [`LocationParser`] and [`AsnParser`] traits.
-pub struct MaxMindParser;
 
 /// Filenames of the downloaded provider archives within the data folder.
 const COUNTRY_FILENAME: &str = "ip-country.zip";
@@ -33,11 +26,13 @@ const COUNTRY_BLOCKS_V6_CSV: &str = "GeoLite2-Country-Blocks-IPv6.csv";
 const ASN_BLOCKS_V4_CSV: &str = "GeoLite2-ASN-Blocks-IPv4.csv";
 const ASN_BLOCKS_V6_CSV: &str = "GeoLite2-ASN-Blocks-IPv6.csv";
 
+pub struct MaxMindParser;
+
 async fn load_or_download(
     config: &IplistConfig,
     filename: &str,
     uri: &str,
-) -> Result<Archive, AppError> {
+) -> Result<GeoData, AppError> {
     match Loader::new(&config.output_folder, filename, config.max_age)
         .load()
         .await
