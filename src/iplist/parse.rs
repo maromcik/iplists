@@ -1,139 +1,149 @@
+use std::collections::HashMap;
 use std::time::Instant;
-use std::{collections::HashMap, io::Cursor};
 
 use ipnet::IpNet;
-use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
+use log::{info, warn};
+use serde::Deserialize;
 
+use crate::iplist::iprange::{AsnParser, LocationParser};
+use crate::iplist::iprange::{IpAsnRange, IpLocationRange, Location};
 use crate::{
     error::AppError,
     iplist::{
         config::IplistConfig,
-        fetch::{Downloader, Loader},
-        iprange::{IpAsnRange, IpLocationRange},
+        fetch::{Archive, Downloader, Loader},
     },
 };
 
-pub struct Parser {
-    pub body: Vec<u8>,
-}
+/// Geo IP data source backed by the MaxMind GeoLite2 CSV exports.
+///
+/// Only this file knows about the MaxMind CSV layout (filenames inside the
+/// ZIP archives, column names, ...). Everything else consumes the canonical
+/// types through the [`LocationParser`] and [`AsnParser`] traits.
+pub struct MaxMindParser;
 
-impl Parser {
-    pub async fn parse<T: Serialize + for<'a> Deserialize<'a>>(
-        &self,
-        name: &str,
-    ) -> Result<Vec<T>, AppError> {
-        let cursor = Cursor::new(&self.body);
-        let mut archive = zip::ZipArchive::new(cursor)?;
-        debug!(
-            "Filenames in archive {}, looking for {}",
-            archive.len(),
-            name
-        );
+/// Filenames of the downloaded provider archives within the data folder.
+const COUNTRY_FILENAME: &str = "ip-country.zip";
+const ASN_FILENAME: &str = "ip-asn.csv.gz";
 
-        let mut filename = String::new();
+/// CSV filenames inside the provider archives.
+const LOCATIONS_CSV: &str = "GeoLite2-Country-Locations-en.csv";
+const COUNTRY_BLOCKS_V4_CSV: &str = "GeoLite2-Country-Blocks-IPv4.csv";
+const COUNTRY_BLOCKS_V6_CSV: &str = "GeoLite2-Country-Blocks-IPv6.csv";
+const ASN_BLOCKS_V4_CSV: &str = "GeoLite2-ASN-Blocks-IPv4.csv";
+const ASN_BLOCKS_V6_CSV: &str = "GeoLite2-ASN-Blocks-IPv6.csv";
 
-        for i in 0..archive.len() {
-            let file = archive.by_index(i)?;
-            debug!("{}", file.name());
-            if file.name().ends_with(name) {
-                debug!("Found! {}", file.name());
-                filename = file.name().to_string();
-            }
-        }
-        let file = archive.by_name(&filename)?;
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
-        let mut data = Vec::new();
-        for record in reader.deserialize() {
-            let range: T = record?;
-            data.push(range);
-        }
-        debug!("{name} parsed");
-        Ok(data)
-    }
-}
-#[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Location {
-    #[serde(rename(deserialize = "geoname_id"))]
-    pub id: String,
-    #[serde(rename(deserialize = "country_name"))]
-    pub name: String,
-    #[serde(rename(deserialize = "country_iso_code"))]
-    pub code: String,
-    #[serde(rename(deserialize = "continent_name"))]
-    pub continent: String,
-}
-
-impl Location {
-    pub async fn parse(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
-        let filename = "ip-country.zip";
-        let parser = match Loader::new(&config.output_folder, filename, config.max_age)
-            .load()
+async fn load_or_download(
+    config: &IplistConfig,
+    filename: &str,
+    uri: &str,
+) -> Result<Archive, AppError> {
+    match Loader::new(&config.output_folder, filename, config.max_age)
+        .load()
+        .await
+    {
+        Ok(parser) => Ok(parser),
+        Err(AppError::DataFileLoadError(e)) => {
+            warn!("re-downloading file; cause: {}", e);
+            Downloader::new(
+                uri,
+                config.timeout,
+                &config.headers,
+                config.basic_auth.as_ref(),
+            )
+            .download()
+            .await?
+            .save(&config.output_folder, filename)
             .await
-        {
-            Ok(parser) => parser,
-            Err(AppError::DataFileLoadError(e)) => {
-                warn!("re-downloading file; cause: {}", e);
-                Downloader::new(
-                    &config.country_uri,
-                    config.timeout,
-                    &config.headers,
-                    config.basic_auth.as_ref(),
-                )
-                .download()
-                .await?
-                .save(&config.output_folder, filename)
-                .await?
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let locations = parser.parse("GeoLite2-Country-Locations-en.csv").await?;
-        Ok(locations)
+        }
+        Err(e) => Err(e),
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IpLocationRangeOnly {
+/// One row of `GeoLite2-Country-Locations-en.csv`.
+#[derive(Deserialize)]
+struct MaxMindLocation {
     #[serde(rename(deserialize = "geoname_id"))]
-    pub id: String,
-    pub network: IpNet,
+    id: String,
+    #[serde(rename(deserialize = "country_name"))]
+    name: String,
+    #[serde(rename(deserialize = "country_iso_code"))]
+    code: String,
+    #[serde(rename(deserialize = "continent_name"))]
+    continent: String,
 }
 
-impl IpLocationRangeOnly {
-    pub async fn download(config: &IplistConfig) -> Result<Vec<Self>, AppError> {
-        let filename = "ip-country.zip";
-        let parser = Loader::new(&config.output_folder, filename, config.max_age)
+impl From<MaxMindLocation> for Location {
+    fn from(row: MaxMindLocation) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            code: row.code,
+            continent: row.continent,
+        }
+    }
+}
+
+/// One row of `GeoLite2-Country-Blocks-IPv*.csv`.
+#[derive(Deserialize)]
+struct MaxMindLocationBlock {
+    #[serde(rename(deserialize = "geoname_id"))]
+    id: String,
+    network: IpNet,
+}
+
+/// One row of `GeoLite2-ASN-Blocks-IPv*.csv`.
+#[derive(Deserialize)]
+struct MaxMindAsnBlock {
+    network: IpNet,
+    #[serde(rename(deserialize = "autonomous_system_number"))]
+    asn: u32,
+    #[serde(rename(deserialize = "autonomous_system_organization"))]
+    isp: String,
+}
+
+impl From<MaxMindAsnBlock> for IpAsnRange {
+    fn from(row: MaxMindAsnBlock) -> Self {
+        Self {
+            network: row.network,
+            asn: row.asn,
+            isp: row.isp,
+        }
+    }
+}
+
+impl LocationParser for MaxMindParser {
+    async fn locations(config: &IplistConfig) -> Result<Vec<Location>, AppError> {
+        let archive = load_or_download(config, COUNTRY_FILENAME, &config.country_uri).await?;
+
+        let rows: Vec<MaxMindLocation> = archive.csv_rows(LOCATIONS_CSV)?;
+        Ok(rows.into_iter().map(Location::from).collect())
+    }
+
+    async fn location_ranges(
+        config: &IplistConfig,
+        locations: &[Location],
+    ) -> Result<Vec<IpLocationRange>, AppError> {
+        // The archive is freshly loaded by `locations()`, reuse it.
+        let archive = Loader::new(&config.output_folder, COUNTRY_FILENAME, config.max_age)
             .load()
             .await?;
 
-        let mut subnets = parser.parse("GeoLite2-Country-Blocks-IPv4.csv").await?;
-        let rest = parser.parse("GeoLite2-Country-Blocks-IPv6.csv").await?;
-        subnets.extend(rest);
-        Ok(subnets)
-    }
+        let mut rows: Vec<MaxMindLocationBlock> = archive.csv_rows(COUNTRY_BLOCKS_V4_CSV)?;
+        let rest = archive.csv_rows(COUNTRY_BLOCKS_V6_CSV)?;
+        rows.extend(rest);
 
-    pub async fn parse(
-        config: &IplistConfig,
-        locations: &Vec<Location>,
-    ) -> Result<Vec<IpLocationRange>, AppError> {
-        let ranges = IpLocationRangeOnly::download(config).await?;
-        info!("parsing {} Location IP ranges", ranges.len());
+        info!("parsing {} Location IP ranges", rows.len());
         let t = Instant::now();
-        let mut location_map = HashMap::new();
-        for location in locations {
-            location_map.insert(location.id.clone(), location);
-        }
+
+        let location_map: HashMap<&str, &Location> =
+            locations.iter().map(|l| (l.id.as_str(), l)).collect();
         let mut parsed_ranges = Vec::new();
-        for range in ranges {
-            if let Some(location) = location_map.get(&range.id) {
+        for row in rows {
+            if let Some(location) = location_map.get(row.id.as_str()) {
                 parsed_ranges.push(IpLocationRange {
-                    network: range.network,
-                    location: (*location).to_owned(),
+                    network: row.network,
+                    location: (*location).clone(),
                 });
             }
         }
@@ -147,57 +157,18 @@ impl IpLocationRangeOnly {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
-pub struct IpAsnRangeOnly {
-    pub network: IpNet,
-    #[serde(rename(deserialize = "autonomous_system_number"))]
-    pub asn: u32,
-    #[serde(rename(deserialize = "autonomous_system_organization"))]
-    pub isp: String,
-}
+impl AsnParser for MaxMindParser {
+    async fn asn_ranges(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
+        let archive = load_or_download(config, ASN_FILENAME, &config.asn_uri).await?;
 
-impl IpAsnRangeOnly {
-    pub async fn parse(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
-        let filename = "ip-asn.csv.gz";
-        let parser = match Loader::new(&config.output_folder, filename, config.max_age)
-            .load()
-            .await
-        {
-            Ok(parser) => parser,
-            Err(AppError::DataFileLoadError(e)) => {
-                warn!("re-downloading file; cause: {}", e);
-                Downloader::new(
-                    &config.asn_uri,
-                    config.timeout,
-                    &config.headers,
-                    config.basic_auth.as_ref(),
-                )
-                .download()
-                .await?
-                .save(&config.output_folder, filename)
-                .await?
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        };
+        let mut rows: Vec<MaxMindAsnBlock> = archive.csv_rows(ASN_BLOCKS_V4_CSV)?;
+        let rest = archive.csv_rows(ASN_BLOCKS_V6_CSV)?;
+        rows.extend(rest);
 
-        let mut ranges: Vec<IpAsnRangeOnly> = parser.parse("GeoLite2-ASN-Blocks-IPv4.csv").await?;
-        let rest = parser.parse("GeoLite2-ASN-Blocks-IPv6.csv").await?;
-        ranges.extend(rest);
-
-        info!("parsing {} ASN IP ranges", ranges.len());
-
+        info!("parsing {} ASN IP ranges", rows.len());
         let t = Instant::now();
-        let mut parsed_ranges = Vec::new();
-        for range in ranges {
-            parsed_ranges.push(IpAsnRange {
-                network: range.network,
-                asn: range.asn,
-                isp: range.isp.clone(),
-            });
-        }
 
+        let parsed_ranges = rows.into_iter().map(IpAsnRange::from).collect::<Vec<_>>();
         info!(
             "parsed {} ASN IP subnets in {:?}",
             parsed_ranges.len(),

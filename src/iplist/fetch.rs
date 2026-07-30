@@ -1,16 +1,15 @@
 use std::{
     collections::HashMap,
+    io::Cursor,
     time::{Duration, SystemTime},
 };
 
 use log::{debug, info};
+use serde::Deserialize;
 use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
 
-use crate::{
-    error::AppError,
-    iplist::{config::BasicAuth, parse::Parser},
-};
+use crate::{error::AppError, iplist::config::BasicAuth};
 
 pub struct Downloader<'a> {
     uri: &'a str,
@@ -70,7 +69,7 @@ impl Loader {
         }
     }
 
-    pub async fn load(&self) -> Result<Parser, AppError> {
+    pub async fn load(&self) -> Result<Archive, AppError> {
         let path = format!("{}/download/{}", self.folder, self.filename);
         let file = tokio::fs::File::open(&path)
             .await
@@ -97,7 +96,7 @@ impl Loader {
         }
         let body = tokio::fs::read(&path).await?;
         info!("loaded file: {}", path);
-        Ok(Parser { body })
+        Ok(Archive::new(body))
     }
 }
 
@@ -106,12 +105,58 @@ pub struct Saver {
 }
 
 impl Saver {
-    pub async fn save(self, folder: &str, filename: &str) -> Result<Parser, AppError> {
+    pub async fn save(self, folder: &str, filename: &str) -> Result<Archive, AppError> {
         tokio::fs::create_dir_all(format!("{}/download", folder)).await?;
         let path = format!("{}/download/{}", folder, filename);
         let mut file = tokio::fs::File::create(&path).await?;
         file.write_all(&self.body).await?;
         info!("data saved to {path}");
-        Ok(Parser { body: self.body })
+        Ok(Archive::new(self.body))
+    }
+}
+
+/// A downloaded geo IP data archive (ZIP bytes). Provider-agnostic; the
+/// provider parser (see [`crate::iplist::parse`]) consumes it.
+pub struct Archive {
+    body: Vec<u8>,
+}
+
+impl Archive {
+    pub fn new(body: Vec<u8>) -> Self {
+        Self { body }
+    }
+
+    /// Deserializes the rows of the (last) CSV member of the ZIP archive
+    /// whose filename ends with `name`.
+    pub fn csv_rows<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
+        let cursor = Cursor::new(&self.body);
+        let mut archive = zip::ZipArchive::new(cursor)?;
+        debug!(
+            "Filenames in archive {}, looking for {}",
+            archive.len(),
+            name
+        );
+
+        let mut filename = String::new();
+
+        for i in 0..archive.len() {
+            let file = archive.by_index(i)?;
+            debug!("{}", file.name());
+            if file.name().ends_with(name) {
+                debug!("Found! {}", file.name());
+                filename = file.name().to_string();
+            }
+        }
+        let file = archive.by_name(&filename)?;
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file);
+        let mut data = Vec::new();
+        for record in reader.deserialize() {
+            let row: T = record?;
+            data.push(row);
+        }
+        debug!("{name} parsed");
+        Ok(data)
     }
 }

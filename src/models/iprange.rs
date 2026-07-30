@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use ipnet::IpNet;
 use serde::Serialize;
 
-use crate::iplist::parse::Location;
+use crate::iplist::iprange::Location;
 
 #[derive(Serialize, Debug, Clone)]
 pub struct CombinedIpRange {

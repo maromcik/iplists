@@ -4,6 +4,7 @@ use crate::handlers::iplist::{
     geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
 use crate::iplist::iprange::{IpRanges, generate_ranges};
+use crate::iplist::parse::MaxMindParser;
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -57,7 +58,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
-        let ip_ranges = generate_ranges(&config.iplist).await?;
+        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist).await?;
         let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
 
         Ok(Arc::new(Self {
@@ -197,7 +198,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 let state_local = state_local.clone();
                 Box::pin(async move {
                     debug!("scheduler:starting iplist update");
-                    match generate_ranges(&config_local.clone()).await {
+                    match generate_ranges::<MaxMindParser>(&config_local.clone()).await {
                         Ok(ranges) => {
                             *state_local.ip_ranges.write().await = ranges;
                         }

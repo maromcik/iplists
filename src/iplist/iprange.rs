@@ -1,5 +1,4 @@
 use crate::iplist::formatter::OutputFormat;
-use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
 use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::ListNetwork;
 use crate::{error::AppError, iplist::config::IplistConfig};
@@ -14,6 +13,30 @@ use std::sync::Arc;
 
 pub trait BaseIpRange {
     fn network(&self) -> &IpNet;
+}
+
+#[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Location {
+    pub id: String,
+    pub name: String,
+    pub code: String,
+    pub continent: String,
+}
+
+#[allow(async_fn_in_trait)]
+pub trait LocationParser {
+    async fn locations(config: &IplistConfig) -> Result<Vec<Location>, AppError>;
+
+    async fn location_ranges(
+        config: &IplistConfig,
+        locations: &[Location],
+    ) -> Result<Vec<IpLocationRange>, AppError>;
+}
+
+#[allow(async_fn_in_trait)]
+pub trait AsnParser {
+    /// IP subnets with their ASN and ISP.
+    async fn asn_ranges(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -330,15 +353,20 @@ impl IpRanges {
     }
 }
 
-pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
-    let locations = Location::parse(config)
+/// Loads the full set of IP ranges using the given geo IP provider parser,
+/// e.g. [`crate::iplist::parse::MaxMindParser`].
+pub async fn generate_ranges<P>(config: &IplistConfig) -> Result<IpRanges, AppError>
+where
+    P: LocationParser + AsnParser,
+{
+    let locations = P::locations(config)
         .await?
         .into_iter()
         .filter(|l| !l.code.is_empty())
         .sorted_by_key(|l| l.code.clone())
         .collect::<Vec<_>>();
-    let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
-    let asn_ranges = IpAsnRangeOnly::parse(config).await?;
+    let location_ranges = P::location_ranges(config, &locations).await?;
+    let asn_ranges = P::asn_ranges(config).await?;
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
