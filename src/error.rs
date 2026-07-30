@@ -59,6 +59,12 @@ impl Debug for AppError {
     }
 }
 
+impl From<zip::result::ZipError> for AppError {
+    fn from(value: zip::result::ZipError) -> Self {
+        Self::FileError(value.to_string())
+    }
+}
+
 impl From<JoinError> for AppError {
     fn from(value: JoinError) -> Self {
         Self::InternalServerError(value.to_string())

@@ -7,20 +7,30 @@ use log::{debug, info};
 use time::OffsetDateTime;
 use tokio::io::AsyncWriteExt;
 
-use crate::{error::AppError, iplist::parse::Parser};
+use crate::{
+    error::AppError,
+    iplist::{config::BasicAuth, parse::Parser},
+};
 
 pub struct Downloader<'a> {
     uri: &'a str,
     timeout: Duration,
     headers: &'a HashMap<String, String>,
+    basic_auth: Option<&'a BasicAuth>,
 }
 
 impl<'a> Downloader<'a> {
-    pub fn new(uri: &'a str, timeout: Duration, headers: &'a HashMap<String, String>) -> Self {
+    pub fn new(
+        uri: &'a str,
+        timeout: Duration,
+        headers: &'a HashMap<String, String>,
+        basic_auth: Option<&'a BasicAuth>,
+    ) -> Self {
         Self {
             uri,
             timeout,
             headers,
+            basic_auth,
         }
     }
 
@@ -36,7 +46,9 @@ impl<'a> Downloader<'a> {
         for (k, v) in self.headers {
             req = req.header(k, v);
         }
-
+        if let Some(auth) = &self.basic_auth {
+            req = req.basic_auth(&auth.username, Some(&auth.password));
+        }
         let body = req.send().await?.bytes().await?.to_vec();
         debug!("data fetched from: {}", uri);
         Ok(Saver { body })

@@ -22,7 +22,7 @@
     });
 
     function selectCountry(country: Location) {
-        navigate(`/location?country=${country.alpha2}&format=json`);
+        navigate(`/location?country=${country.code}&format=json`);
     }
 </script>
 
@@ -41,7 +41,7 @@
                 <button
                     class="bg-cards text-gray-900 dark:text-gray-100 p-4 rounded-xl shadow-sm hover:shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
                     on:click={() => selectCountry(country)}>
-                    <i class="fas fa-flag mr-2"></i>{country.name} ({country.alpha2})
+                    <i class="fas fa-flag mr-2"></i>{country.name} ({country.code})
                 </button>
             {/each}
         </div>

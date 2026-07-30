@@ -1,6 +1,6 @@
 [package]
 name = "iplists"
-version = "1.7.7"
+version = "1.8.0"
 edition = "2024"
 
 [dependencies]
@@ -32,3 +32,4 @@ bytes = "1.11.0"
 tracing-appender = "0.2.5"
 humantime-serde = "1.1.1"
 ipnet = { version = "2.12.0", features = ["std", "serde", "json"] }
+zip = "8.6.0"

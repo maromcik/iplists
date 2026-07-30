@@ -4,6 +4,7 @@ use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::ListNetwork;
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
+use itertools::Itertools;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -218,7 +219,7 @@ impl IpRanges {
             if range.network.is_ipv4() {
                 if ipv4_trie_location.insert(&range) {
                     location_ranges_by_country
-                        .entry(range.location.country_alpha2.clone())
+                        .entry(range.location.code.clone())
                         .or_default()
                         .ipv4
                         .push(range.clone());
@@ -231,7 +232,7 @@ impl IpRanges {
             } else {
                 if ipv6_trie_location.insert(&range) {
                     location_ranges_by_country
-                        .entry(range.location.country_alpha2.clone())
+                        .entry(range.location.code.clone())
                         .or_default()
                         .ipv6
                         .push(range.clone());
@@ -330,7 +331,12 @@ impl IpRanges {
 }
 
 pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError> {
-    let locations = Location::load(config)?;
+    let locations = Location::parse(config)
+        .await?
+        .into_iter()
+        .filter(|l| !l.code.is_empty())
+        .sorted_by_key(|l| l.code.clone())
+        .collect::<Vec<_>>();
     let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
     let asn_ranges = IpAsnRangeOnly::parse(config).await?;
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);

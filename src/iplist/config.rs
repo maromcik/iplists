@@ -10,6 +10,12 @@ fn default_max_age() -> std::time::Duration {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct BasicAuth {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IplistConfig {
     pub country_uri: String,
     pub asn_uri: String,
@@ -21,6 +27,8 @@ pub struct IplistConfig {
     pub max_age: std::time::Duration,
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    #[serde(default)]
+    pub basic_auth: Option<BasicAuth>,
     pub location_path: String,
     pub output_folder: String,
     pub download_cron: String,

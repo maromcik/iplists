@@ -121,7 +121,7 @@
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Country</dt>
-                    <dd class="text-sm text-gray-900 dark:text-gray-100 sm:col-span-2">{result.location.name} ({result.location.alpha2})</dd>
+                    <dd class="text-sm text-gray-900 dark:text-gray-100 sm:col-span-2">{result.location.name} ({result.location.code})</dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Continent</dt>
