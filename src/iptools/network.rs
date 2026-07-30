@@ -1,7 +1,7 @@
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 use serde::{Deserialize, Serialize};
 use std::{
-    cmp::max,
+    cmp::min,
     fmt::{Debug, Display},
     net::IpAddr,
 };
@@ -63,7 +63,7 @@ where
     fn network_prefix(&self) -> u8 {
         match self {
             NetworkType::Subnet(net) => net.network_prefix(),
-            NetworkType::Range(net1, net2) => max(net1.network_prefix(), net2.network_prefix()),
+            NetworkType::Range(net1, net2) => min(net1.network_prefix(), net2.network_prefix()),
         }
     }
 
