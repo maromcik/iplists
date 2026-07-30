@@ -23,7 +23,7 @@ impl OutputFormat {
         match self {
             OutputFormat::Text => FormattedOutput::new(
                 data.iter()
-                    .map(|ip| ip.network_type().addr_string())
+                    .map(|ip| ip.network().addr_string())
                     .collect::<Vec<_>>()
                     .join("\n"),
                 OutputFormat::Text,
@@ -52,11 +52,11 @@ impl OutputFormat {
                 let mut ipv4: bool = false;
                 let mut ipv6: bool = false;
                 for ip in data {
-                    if ip.network_type().is_ipv4() {
-                        output.push_str(&format!("\t\t{},\n", ip.network_type()));
+                    if ip.network().is_ipv4() {
+                        output.push_str(&format!("\t\t{},\n", ip.network()));
                         ipv4 = true;
                     } else {
-                        output6.push_str(&format!("\t\t{},\n", ip.network_type()));
+                        output6.push_str(&format!("\t\t{},\n", ip.network()));
                         ipv6 = true;
                     }
                 }

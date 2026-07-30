@@ -1,10 +1,5 @@
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::min,
-    fmt::{Debug, Display},
-    net::IpAddr,
-};
+use std::{fmt::Debug, net::IpAddr};
 
 use crate::{
     iplist::iprange::{IpAsnRange, IpLocationRange},
@@ -17,93 +12,13 @@ pub trait ListNetwork: Clone + Debug {
     fn network(&self) -> IpNet;
     fn address(&self) -> IpAddr;
     fn network_prefix(&self) -> u8;
-    fn trie_key(&self) -> Option<TrieKey>;
+    fn trie_key(&self) -> TrieKey;
     fn addr_string(&self) -> String;
     fn is_network(&self) -> bool;
     fn is_ipv4(&self) -> bool;
     fn is_ipv6(&self) -> bool;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub enum NetworkType<T>
-where
-    T: ListNetwork + Clone + Debug,
-{
-    Subnet(T),
-    Range(T, T),
-}
-
-impl<T> Display for NetworkType<T>
-where
-    T: ListNetwork + Clone + Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.addr_string())
-    }
-}
-
-impl<T> ListNetwork for NetworkType<T>
-where
-    T: ListNetwork + Clone + Debug,
-{
-    fn network(&self) -> IpNet {
-        match self {
-            NetworkType::Subnet(net) => net.network(),
-            NetworkType::Range(net1, _) => net1.network(),
-        }
-    }
-
-    fn address(&self) -> IpAddr {
-        match self {
-            NetworkType::Subnet(net) => net.address(),
-            NetworkType::Range(net1, _) => net1.address(),
-        }
-    }
-
-    fn network_prefix(&self) -> u8 {
-        match self {
-            NetworkType::Subnet(net) => net.network_prefix(),
-            NetworkType::Range(net1, net2) => min(net1.network_prefix(), net2.network_prefix()),
-        }
-    }
-
-    fn trie_key(&self) -> Option<TrieKey> {
-        match self {
-            NetworkType::Subnet(net) => net.trie_key(),
-            NetworkType::Range(_, _) => None,
-        }
-    }
-
-    fn addr_string(&self) -> String {
-        match self {
-            NetworkType::Subnet(net) => net.addr_string(),
-            NetworkType::Range(net1, net2) => {
-                format!("{}-{}", net1.address(), net2.address())
-            }
-        }
-    }
-
-    fn is_network(&self) -> bool {
-        match self {
-            NetworkType::Subnet(net) => net.is_network(),
-            NetworkType::Range(net1, net2) => net1.is_network() && net2.is_network(),
-        }
-    }
-
-    fn is_ipv4(&self) -> bool {
-        match self {
-            NetworkType::Subnet(net) => net.is_ipv4(),
-            NetworkType::Range(net1, net2) => net1.is_ipv4() && net2.is_ipv4(),
-        }
-    }
-
-    fn is_ipv6(&self) -> bool {
-        match self {
-            NetworkType::Subnet(net) => net.is_ipv6(),
-            NetworkType::Range(net1, net2) => net1.is_ipv6() && net2.is_ipv6(),
-        }
-    }
-}
 impl ListNetwork for IpAddr {
     fn network(&self) -> IpNet {
         let prefix = match self {
@@ -127,10 +42,10 @@ impl ListNetwork for IpAddr {
         }
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
+    fn trie_key(&self) -> TrieKey {
         match self {
-            IpAddr::V4(ip) => Some(TrieKey::new(BitIp::Ipv4(ip.to_bits()), 32)),
-            IpAddr::V6(ip) => Some(TrieKey::new(BitIp::Ipv6(ip.to_bits()), 128)),
+            IpAddr::V4(ip) => TrieKey::new(BitIp::Ipv4(ip.to_bits()), 32),
+            IpAddr::V6(ip) => TrieKey::new(BitIp::Ipv6(ip.to_bits()), 128),
         }
     }
 
@@ -176,7 +91,7 @@ impl ListNetwork for IpNet {
         }
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
+    fn trie_key(&self) -> TrieKey {
         match self {
             IpNet::V4(net) => net.trie_key(),
             IpNet::V6(net) => net.trie_key(),
@@ -221,11 +136,8 @@ impl ListNetwork for Ipv4Net {
         IpAddr::V4(self.addr())
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
-        Some(TrieKey::new(
-            BitIp::Ipv4(self.network().to_bits()),
-            self.network_prefix(),
-        ))
+    fn trie_key(&self) -> TrieKey {
+        TrieKey::new(BitIp::Ipv4(self.network().to_bits()), self.network_prefix())
     }
 
     fn is_ipv4(&self) -> bool {
@@ -259,11 +171,8 @@ impl ListNetwork for Ipv6Net {
         IpAddr::V6(self.addr())
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
-        Some(TrieKey::new(
-            BitIp::Ipv6(self.network().to_bits()),
-            self.network_prefix(),
-        ))
+    fn trie_key(&self) -> TrieKey {
+        TrieKey::new(BitIp::Ipv6(self.network().to_bits()), self.network_prefix())
     }
 
     fn is_ipv4(&self) -> bool {
@@ -289,14 +198,14 @@ impl ListNetwork for Ipv6Net {
 
 impl ListNetwork for IpAsnRange {
     fn network(&self) -> IpNet {
-        self.network.network()
+        self.network
     }
 
     fn address(&self) -> std::net::IpAddr {
         self.network.address()
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
+    fn trie_key(&self) -> TrieKey {
         self.network.trie_key()
     }
 
@@ -323,14 +232,14 @@ impl ListNetwork for IpAsnRange {
 
 impl ListNetwork for IpLocationRange {
     fn network(&self) -> IpNet {
-        self.network.network()
+        self.network
     }
 
     fn address(&self) -> std::net::IpAddr {
         self.network.address()
     }
 
-    fn trie_key(&self) -> Option<TrieKey> {
+    fn trie_key(&self) -> TrieKey {
         self.network.trie_key()
     }
 

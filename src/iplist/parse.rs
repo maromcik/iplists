@@ -9,9 +9,8 @@ use crate::{
     iplist::{
         config::IplistConfig,
         fetch::{Downloader, Loader},
-        iprange::{IpAsnRange, IpLocationRange},
+        iprange::{IpAsnRange, IpLocationRange, summarize_ranges},
     },
-    iptools::network::NetworkType,
 };
 
 pub struct Parser {
@@ -89,10 +88,8 @@ impl IpLocationRangeOnly {
         locations: &Vec<Location>,
     ) -> Result<Vec<IpLocationRange>, AppError> {
         let ranges = IpLocationRangeOnly::download(config).await?;
-
+        info!("parsing {} Location IP ranges", ranges.len());
         let t = Instant::now();
-
-        debug!("parsing {} Location IP ranges", ranges.len());
         let mut location_map = HashMap::new();
         for location in locations {
             location_map.insert(location.country_alpha2.clone(), location);
@@ -100,35 +97,20 @@ impl IpLocationRangeOnly {
         let mut parsed_ranges = Vec::new();
         for range in ranges {
             if let Some(location) = location_map.get(&range.country_alpha2) {
-                if config.split_ranges {
-                    let ipnet_range = match (range.start, range.end) {
-                        (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
-                            ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
-                        }
-                        (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
-                            ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
-                        }
-                        _ => {
-                            continue;
-                        }
-                    };
+                let Some(subnets) = summarize_ranges(range.start, range.end) else {
+                    continue;
+                };
 
-                    for subnet in ipnet_range {
-                        parsed_ranges.push(IpLocationRange {
-                            network: NetworkType::Subnet(subnet),
-                            location: (*location).to_owned(),
-                        });
-                    }
-                } else {
+                for subnet in subnets {
                     parsed_ranges.push(IpLocationRange {
-                        network: NetworkType::Range(range.start.into(), range.end.into()),
+                        network: subnet,
                         location: (*location).to_owned(),
                     });
                 }
             }
         }
         info!(
-            "parsed {} Location IP ranges in {:?}",
+            "parsed {} Location IP subnets in {:?}",
             parsed_ranges.len(),
             t.elapsed()
         );
@@ -167,38 +149,28 @@ impl IpAsnRangeOnly {
         };
 
         let ranges: Vec<IpAsnRangeOnly> = parser.parse().await?;
+        info!("parsing {} ASN IP ranges", ranges.len());
+
+        let t = Instant::now();
         let mut parsed_ranges = Vec::new();
         for range in ranges {
-            if config.split_ranges {
-                let ipnet_range = match (range.start, range.end) {
-                    (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => {
-                        ipnet::IpSubnets::V4(ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0))
-                    }
-                    (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => {
-                        ipnet::IpSubnets::V6(ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0))
-                    }
-                    _ => {
-                        continue;
-                    }
-                };
-
-                for subnet in ipnet_range {
-                    parsed_ranges.push(IpAsnRange {
-                        network: NetworkType::Subnet(subnet),
-                        asn: range.asn,
-                        isp: range.isp.clone(),
-                    });
-                }
-            } else {
+            let Some(subnets) = summarize_ranges(range.start, range.end) else {
+                continue;
+            };
+            for subnet in subnets {
                 parsed_ranges.push(IpAsnRange {
-                    network: NetworkType::Range(range.start.into(), range.end.into()),
+                    network: subnet,
                     asn: range.asn,
                     isp: range.isp.clone(),
                 });
             }
         }
 
-        info!("parsed {} ASN IP ranges", parsed_ranges.len(),);
+        info!(
+            "parsed {} ASN IP subnets in {:?}",
+            parsed_ranges.len(),
+            t.elapsed()
+        );
 
         Ok(parsed_ranges)
     }

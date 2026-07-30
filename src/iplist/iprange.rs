@@ -1,40 +1,41 @@
 use crate::iplist::formatter::OutputFormat;
 use crate::iplist::parse::{IpAsnRangeOnly, IpLocationRangeOnly, Location};
 use crate::iptools::iptrie::IPTrie;
-use crate::iptools::network::{ListNetwork, NetworkType};
+use crate::iptools::network::ListNetwork;
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 pub trait BaseIpRange {
-    fn network_type(&self) -> &NetworkType<IpNet>;
+    fn network(&self) -> &IpNet;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRange {
-    pub network: NetworkType<IpNet>,
+    pub network: IpNet,
     pub location: Location,
 }
 
 impl BaseIpRange for IpLocationRange {
-    fn network_type(&self) -> &NetworkType<IpNet> {
+    fn network(&self) -> &IpNet {
         &self.network
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct IpAsnRange {
-    pub network: NetworkType<IpNet>,
+    pub network: IpNet,
     pub asn: u32,
     pub isp: String,
 }
 
 impl BaseIpRange for IpAsnRange {
-    fn network_type(&self) -> &NetworkType<IpNet> {
+    fn network(&self) -> &IpNet {
         &self.network
     }
 }
@@ -201,7 +202,6 @@ pub struct IpRanges {
 
 impl IpRanges {
     pub fn new(
-        config: &IplistConfig,
         mut location_ranges: Vec<IpLocationRange>,
         mut asn_ranges: Vec<IpAsnRange>,
         locations: Vec<Location>,
@@ -216,7 +216,7 @@ impl IpRanges {
 
         for range in location_ranges {
             if range.network.is_ipv4() {
-                if !config.split_ranges || ipv4_trie_location.insert(&range) {
+                if ipv4_trie_location.insert(&range) {
                     location_ranges_by_country
                         .entry(range.location.country_alpha2.clone())
                         .or_default()
@@ -229,7 +229,7 @@ impl IpRanges {
                         .push(range);
                 }
             } else {
-                if !config.split_ranges || ipv6_trie_location.insert(&range) {
+                if ipv6_trie_location.insert(&range) {
                     location_ranges_by_country
                         .entry(range.location.country_alpha2.clone())
                         .or_default()
@@ -249,7 +249,7 @@ impl IpRanges {
         let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
         for range in &asn_ranges {
             if range.network.is_ipv4() {
-                if !config.split_ranges || ipv4_trie_asn.insert(range) {
+                if ipv4_trie_asn.insert(range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
@@ -257,7 +257,7 @@ impl IpRanges {
                         .push(range.clone());
                 }
             } else {
-                if !config.split_ranges || ipv6_trie_asn.insert(range) {
+                if ipv6_trie_asn.insert(range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
@@ -333,7 +333,19 @@ pub async fn generate_ranges(config: &IplistConfig) -> Result<IpRanges, AppError
     let locations = Location::load(config)?;
     let location_ranges = IpLocationRangeOnly::parse(config, &locations).await?;
     let asn_ranges = IpAsnRangeOnly::parse(config).await?;
-    let ip_ranges = IpRanges::new(config, location_ranges, asn_ranges, locations);
+    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
+}
+
+pub fn summarize_ranges(start: IpAddr, end: IpAddr) -> Option<ipnet::IpSubnets> {
+    match (start, end) {
+        (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => Some(ipnet::IpSubnets::V4(
+            ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0),
+        )),
+        (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => Some(ipnet::IpSubnets::V6(
+            ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0),
+        )),
+        _ => None,
+    }
 }

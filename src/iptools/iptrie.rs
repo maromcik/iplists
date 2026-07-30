@@ -140,9 +140,7 @@ impl<T: ListNetwork> TrieNode<T> {
                 return false;
             }
 
-            let Some(key) = network.trie_key() else {
-                return false;
-            };
+            let key = network.trie_key();
             let bit = key.bit(i);
             node = node.children[bit as usize].get_or_insert_with(|| Box::new(TrieNode::new()));
         }
