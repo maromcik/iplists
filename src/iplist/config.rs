@@ -29,7 +29,6 @@ pub struct IplistConfig {
     pub headers: HashMap<String, String>,
     #[serde(default)]
     pub basic_auth: Option<BasicAuth>,
-    pub location_path: String,
     pub output_folder: String,
     pub download_cron: String,
 }
