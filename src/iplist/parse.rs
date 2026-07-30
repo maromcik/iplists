@@ -54,7 +54,7 @@ impl Parser {
         Ok(data)
     }
 }
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Location {
     #[serde(rename(deserialize = "geoname_id"))]
     pub id: String,

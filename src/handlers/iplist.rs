@@ -4,11 +4,13 @@ use crate::forms::IpVersion;
 use crate::forms::extractors::AppQuery;
 use crate::forms::iplist::{ApiGeoLocation, IpListFormByAsn, IpListFormByCountry};
 use crate::iplist::iprange::{IpAsnRangeByIp, IpLocationRange, IpLocationRangeByIp};
+use crate::iplist::parse::Location;
 use crate::iptools::iptrie::TrieKey;
 use crate::models::iprange::CombinedIpRange;
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
+use ipnet::{IpNet, Ipv4Net};
 use itertools::Itertools;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -158,6 +160,13 @@ pub async fn geo_location(
             asn.asn,
             asn.isp.clone(),
             location.location.clone(),
+        ),
+        (None, Some(asn)) => CombinedIpRange::new(
+            form.ip,
+            IpNet::V4(Ipv4Net::default()),
+            asn.asn,
+            asn.isp.clone(),
+            Location::default(),
         ),
         _ => return Err(AppError::NotFound("No location found".to_string())),
     };
