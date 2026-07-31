@@ -19,7 +19,7 @@ use crate::{
 
 /// Filenames of the downloaded provider archives within the data folder.
 const COUNTRY_FILENAME: &str = "ip-country.zip";
-const ASN_FILENAME: &str = "ip-asn.csv.gz";
+const ASN_FILENAME: &str = "ip-asn.zip";
 
 /// CSV filenames inside the provider archives.
 const LOCATIONS_CSV: &str = "GeoLite2-Country-Locations-en.csv";
