@@ -1,10 +1,12 @@
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::time::Instant;
 
 use ipnet::IpNet;
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::Deserialize;
 
+use crate::iplist::fetch::GeoDataParser;
 use crate::iplist::iprange::{AsnParser, LocationParser};
 use crate::iplist::iprange::{IpAsnRange, IpLocationRange, Location};
 use crate::{
@@ -111,7 +113,7 @@ impl LocationParser for MaxMindParser {
     async fn locations(config: &IplistConfig) -> Result<Vec<Location>, AppError> {
         let archive = load_or_download(config, COUNTRY_FILENAME, &config.country_uri).await?;
 
-        let rows: Vec<MaxMindLocation> = archive.csv_rows(LOCATIONS_CSV)?;
+        let rows: Vec<MaxMindLocation> = archive.parse(LOCATIONS_CSV).await?;
         Ok(rows.into_iter().map(Location::from).collect())
     }
 
@@ -124,8 +126,8 @@ impl LocationParser for MaxMindParser {
             .load()
             .await?;
 
-        let mut rows: Vec<MaxMindLocationBlock> = archive.csv_rows(COUNTRY_BLOCKS_V4_CSV)?;
-        let rest = archive.csv_rows(COUNTRY_BLOCKS_V6_CSV)?;
+        let mut rows: Vec<MaxMindLocationBlock> = archive.parse(COUNTRY_BLOCKS_V4_CSV).await?;
+        let rest = archive.parse(COUNTRY_BLOCKS_V6_CSV).await?;
         rows.extend(rest);
 
         info!("parsing {} Location IP ranges", rows.len());
@@ -156,8 +158,8 @@ impl AsnParser for MaxMindParser {
     async fn asn_ranges(config: &IplistConfig) -> Result<Vec<IpAsnRange>, AppError> {
         let archive = load_or_download(config, ASN_FILENAME, &config.asn_uri).await?;
 
-        let mut rows: Vec<MaxMindAsnBlock> = archive.csv_rows(ASN_BLOCKS_V4_CSV)?;
-        let rest = archive.csv_rows(ASN_BLOCKS_V6_CSV)?;
+        let mut rows: Vec<MaxMindAsnBlock> = archive.parse(ASN_BLOCKS_V4_CSV).await?;
+        let rest = archive.parse(ASN_BLOCKS_V6_CSV).await?;
         rows.extend(rest);
 
         info!("parsing {} ASN IP ranges", rows.len());
@@ -171,5 +173,39 @@ impl AsnParser for MaxMindParser {
         );
 
         Ok(parsed_ranges)
+    }
+}
+
+impl GeoDataParser for GeoData {
+    async fn parse<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
+        let cursor = Cursor::new(&self.body);
+        let mut archive = zip::ZipArchive::new(cursor)?;
+        debug!(
+            "Filenames in archive {}, looking for {}",
+            archive.len(),
+            name
+        );
+
+        let mut filename = String::new();
+
+        for i in 0..archive.len() {
+            let file = archive.by_index(i)?;
+            debug!("{}", file.name());
+            if file.name().ends_with(name) {
+                debug!("Found! {}", file.name());
+                filename = file.name().to_string();
+            }
+        }
+        let file = archive.by_name(&filename)?;
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file);
+        let mut data = Vec::new();
+        for record in reader.deserialize() {
+            let row: T = record?;
+            data.push(row);
+        }
+        debug!("{name} parsed");
+        Ok(data)
     }
 }

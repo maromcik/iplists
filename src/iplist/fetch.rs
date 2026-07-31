@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    io::Cursor,
     time::{Duration, SystemTime},
 };
 
@@ -118,45 +117,18 @@ impl Saver {
 /// A downloaded geo IP data archive (ZIP bytes). Provider-agnostic; the
 /// provider parser (see [`crate::iplist::parse`]) consumes it.
 pub struct GeoData {
-    body: Vec<u8>,
+    pub body: Vec<u8>,
+}
+
+pub trait GeoDataParser {
+    fn parse<T: for<'de> Deserialize<'de>>(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<T>, AppError>>;
 }
 
 impl GeoData {
     pub fn new(body: Vec<u8>) -> Self {
         Self { body }
-    }
-
-    /// Deserializes the rows of the (last) CSV member of the ZIP archive
-    /// whose filename ends with `name`.
-    pub fn csv_rows<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
-        let cursor = Cursor::new(&self.body);
-        let mut archive = zip::ZipArchive::new(cursor)?;
-        debug!(
-            "Filenames in archive {}, looking for {}",
-            archive.len(),
-            name
-        );
-
-        let mut filename = String::new();
-
-        for i in 0..archive.len() {
-            let file = archive.by_index(i)?;
-            debug!("{}", file.name());
-            if file.name().ends_with(name) {
-                debug!("Found! {}", file.name());
-                filename = file.name().to_string();
-            }
-        }
-        let file = archive.by_name(&filename)?;
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
-        let mut data = Vec::new();
-        for record in reader.deserialize() {
-            let row: T = record?;
-            data.push(row);
-        }
-        debug!("{name} parsed");
-        Ok(data)
     }
 }

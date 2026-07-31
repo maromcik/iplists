@@ -4,7 +4,7 @@ use crate::handlers::iplist::{
     geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
 use crate::iplist::iprange::{IpRanges, generate_ranges};
-use crate::iplist::parse::MaxMindParser;
+use crate::iplist::parsers::maxmind::MaxMindParser;
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
