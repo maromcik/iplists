@@ -5,19 +5,23 @@ all_log_level: info
 #hostnames:
 #   - "localhost:443"
 iplist:
-   country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
-   asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz
-   location_path: static/lists/location.csv
-   output_folder: static/lists
+   # country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
+   # asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz
+   country_uri: https://download.maxmind.com/geoip/databases/GeoLite2-Country-CSV/download?suffix=zip
+   asn_uri: https://download.maxmind.com/geoip/databases/GeoLite2-ASN-CSV/download?suffix=zip
+   output_folder: lists
    download_cron: "0 0 * * * *"
-   # must be true in order for Geo location to work
-   # split_ranges: false
+   max_age: 24h
+   timeout: 10s
+   # basic_auth:
+      # username: ""
+      # password: ""
 blocklist:
    ipv4_url: https://blocklist
    ipv6_url: https://blocklist
-   ipv4_folder: static/lists/ipv4
-   ipv6_folder: static/lists/ipv6
+   ipv4_folder: lists/ipv4
+   ipv6_folder: lists/ipv6
    headers:
       Authorization: "Token xxxx"
-   timeout: 10
-   download_cron: "0 0 * * * *"
+   timeout: 10s
+   download_cron: "0/10 * * * * *"
