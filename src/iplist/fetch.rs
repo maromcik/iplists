@@ -47,7 +47,13 @@ impl<'a> Downloader<'a> {
         if let Some(auth) = &self.basic_auth {
             req = req.basic_auth(&auth.username, Some(&auth.password));
         }
-        let body = req.send().await?.bytes().await?.to_vec();
+        let body = req
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?
+            .to_vec();
         debug!("data fetched from: {}", uri);
         Ok(Saver { body })
     }
