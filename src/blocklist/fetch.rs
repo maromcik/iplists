@@ -1,9 +1,8 @@
 use crate::blocklist::config::BlocklistConfig;
 use crate::error::AppError;
-use crate::iplist::iprange::summarize_ranges;
 use crate::iptools::iptrie::deduplicate;
 use crate::iptools::network::ListNetwork;
-use ipnet::IpNet;
+use ipnetwork::{Ipv4Network, Ipv6Network};
 use log::{debug, error, warn};
 use std::fmt::Display;
 use std::str::FromStr;
@@ -11,8 +10,8 @@ use tokio::fs::DirEntry;
 
 #[derive(Default, Debug)]
 pub struct BlocklistRanges {
-    pub ipv4: Vec<IpNet>,
-    pub ipv6: Vec<IpNet>,
+    pub ipv4: Vec<Ipv4Network>,
+    pub ipv6: Vec<Ipv6Network>,
 }
 
 impl BlocklistRanges {
@@ -40,8 +39,8 @@ impl BlocklistRanges {
         let ipv4 = fetch_blocklist(config, &config.ipv4_url).await?;
         let ipv6 = fetch_blocklist(config, &config.ipv6_url).await?;
 
-        let ipv4 = validate_subnets::<IpNet>(&ipv4, None);
-        let ipv6 = validate_subnets::<IpNet>(&ipv6, None);
+        let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, None);
+        let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, None);
 
         let ipv4 = deduplicate(ipv4);
         let ipv6 = deduplicate(ipv6);
@@ -78,7 +77,7 @@ impl BlocklistRanges {
 
 async fn read_file<T>(f: DirEntry, ranges: &mut Vec<T>, config: &BlocklistConfig)
 where
-    T: ListNetwork + FromStr + Display + std::fmt::Debug + From<IpNet>,
+    T: ListNetwork + FromStr + Display + std::fmt::Debug,
     <T as FromStr>::Err: Display,
     AppError: From<<T as FromStr>::Err>,
 {
@@ -140,7 +139,7 @@ pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> 
 
 pub fn validate_subnets<T>(ips: &[String], log: Option<&str>) -> Vec<T>
 where
-    T: ListNetwork + FromStr + Display + std::fmt::Debug + From<IpNet>,
+    T: ListNetwork + FromStr + Display + std::fmt::Debug,
     <T as FromStr>::Err: Display,
     AppError: From<<T as FromStr>::Err>,
 {
@@ -148,28 +147,13 @@ where
     for ip in ips {
         match ip.parse::<T>() {
             Ok(parsed_ip) => {
-                if parsed_ip.is_network() {
+                if parsed_ip.is_net() {
                     parsed.push(parsed_ip);
                 } else {
                     warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
                 }
             }
             Err(e) => {
-                let mut ip_split = ip.split("-");
-                let start = ip_split.next();
-                let end = ip_split.next();
-                if let (Some(start), Some(end)) = (start, end)
-                    && let (Ok(start), Ok(end)) = (start.parse::<T>(), end.parse::<T>())
-                {
-                    debug!("parsed range: {start} - {end}");
-                    let Some(subnets) = summarize_ranges(start.address(), end.address()) else {
-                        continue;
-                    };
-                    for subnet in subnets {
-                        parsed.push(subnet.into());
-                    }
-                    continue;
-                }
                 warn!("{}:ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
             }
         }

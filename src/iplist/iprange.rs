@@ -8,7 +8,6 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::net::IpAddr;
 use std::sync::Arc;
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -339,16 +338,4 @@ where
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     ip_ranges.location_ranges.save(config).await?;
     Ok(ip_ranges)
-}
-
-pub fn summarize_ranges(start: IpAddr, end: IpAddr) -> Option<ipnet::IpSubnets> {
-    match (start, end) {
-        (IpAddr::V4(ipv4_addr1), IpAddr::V4(ipv4_addr2)) => Some(ipnet::IpSubnets::V4(
-            ipnet::Ipv4Subnets::new(ipv4_addr1, ipv4_addr2, 0),
-        )),
-        (IpAddr::V6(ipv6_addr1), IpAddr::V6(ipv6_addr2)) => Some(ipnet::IpSubnets::V6(
-            ipnet::Ipv6Subnets::new(ipv6_addr1, ipv6_addr2, 0),
-        )),
-        _ => None,
-    }
 }

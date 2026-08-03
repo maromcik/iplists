@@ -9,7 +9,7 @@ axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 tokio = {version = "1.48.0", features = ["full"]}
 log = "0.4.29"
 thiserror = "2.0.17"
-ipnetwork = { version = "0.21.1", features = ["serde"]}
+ipnetwork = { version = "0.21.1", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive", "std", "rc"] }
 askama = "0.16.0"
 itertools = "0.15.0"
