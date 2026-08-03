@@ -13,7 +13,7 @@ use crate::{
     error::AppError,
     iplist::{
         config::IplistConfig,
-        fetch::{Downloader, GeoData, Loader},
+        fetch::{Downloader, Loader},
     },
 };
 
@@ -28,13 +28,55 @@ const COUNTRY_BLOCKS_V6_CSV: &str = "GeoLite2-Country-Blocks-IPv6.csv";
 const ASN_BLOCKS_V4_CSV: &str = "GeoLite2-ASN-Blocks-IPv4.csv";
 const ASN_BLOCKS_V6_CSV: &str = "GeoLite2-ASN-Blocks-IPv6.csv";
 
+pub struct MaxMindGeoData {
+    pub body: Vec<u8>,
+}
+
+impl GeoDataParser for MaxMindGeoData {
+    fn new(body: Vec<u8>) -> Self {
+        Self { body }
+    }
+
+    async fn parse<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
+        let cursor = Cursor::new(&self.body);
+        let mut archive = zip::ZipArchive::new(cursor)?;
+        debug!(
+            "Filenames in archive {}, looking for {}",
+            archive.len(),
+            name
+        );
+
+        let mut filename = String::new();
+
+        for i in 0..archive.len() {
+            let file = archive.by_index(i)?;
+            debug!("{}", file.name());
+            if file.name().ends_with(name) {
+                debug!("Found! {}", file.name());
+                filename = file.name().to_string();
+            }
+        }
+        let file = archive.by_name(&filename)?;
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(file);
+        let mut data = Vec::new();
+        for record in reader.deserialize() {
+            let row: T = record?;
+            data.push(row);
+        }
+        debug!("{name} parsed");
+        Ok(data)
+    }
+}
+
 pub struct MaxMindParser;
 
 async fn load_or_download(
     config: &IplistConfig,
     filename: &str,
     uri: &str,
-) -> Result<GeoData, AppError> {
+) -> Result<MaxMindGeoData, AppError> {
     match Loader::new(&config.output_folder, filename, config.max_age)
         .load()
         .await
@@ -123,7 +165,7 @@ impl LocationParser for MaxMindParser {
     ) -> Result<Vec<IpLocationRange>, AppError> {
         // The archive is freshly loaded by `locations()`, reuse it.
         let archive = Loader::new(&config.output_folder, COUNTRY_FILENAME, config.max_age)
-            .load()
+            .load::<MaxMindGeoData>()
             .await?;
 
         let mut rows: Vec<MaxMindLocationBlock> = archive.parse(COUNTRY_BLOCKS_V4_CSV).await?;
@@ -173,39 +215,5 @@ impl AsnParser for MaxMindParser {
         );
 
         Ok(parsed_ranges)
-    }
-}
-
-impl GeoDataParser for GeoData {
-    async fn parse<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
-        let cursor = Cursor::new(&self.body);
-        let mut archive = zip::ZipArchive::new(cursor)?;
-        debug!(
-            "Filenames in archive {}, looking for {}",
-            archive.len(),
-            name
-        );
-
-        let mut filename = String::new();
-
-        for i in 0..archive.len() {
-            let file = archive.by_index(i)?;
-            debug!("{}", file.name());
-            if file.name().ends_with(name) {
-                debug!("Found! {}", file.name());
-                filename = file.name().to_string();
-            }
-        }
-        let file = archive.by_name(&filename)?;
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(true)
-            .from_reader(file);
-        let mut data = Vec::new();
-        for record in reader.deserialize() {
-            let row: T = record?;
-            data.push(row);
-        }
-        debug!("{name} parsed");
-        Ok(data)
     }
 }

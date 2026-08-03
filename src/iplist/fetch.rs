@@ -10,6 +10,15 @@ use tokio::io::AsyncWriteExt;
 
 use crate::{error::AppError, iplist::config::BasicAuth};
 
+pub trait GeoDataParser {
+    fn new(body: Vec<u8>) -> Self;
+
+    fn parse<T: for<'de> Deserialize<'de>>(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<T>, AppError>>;
+}
+
 pub struct Downloader<'a> {
     uri: &'a str,
     timeout: Duration,
@@ -74,7 +83,7 @@ impl Loader {
         }
     }
 
-    pub async fn load(&self) -> Result<GeoData, AppError> {
+    pub async fn load<T: GeoDataParser>(&self) -> Result<T, AppError> {
         let path = format!("{}/download/{}", self.folder, self.filename);
         let file = tokio::fs::File::open(&path)
             .await
@@ -101,7 +110,7 @@ impl Loader {
         }
         let body = tokio::fs::read(&path).await?;
         info!("loaded file: {}", path);
-        Ok(GeoData::new(body))
+        Ok(T::new(body))
     }
 }
 
@@ -110,31 +119,12 @@ pub struct Saver {
 }
 
 impl Saver {
-    pub async fn save(self, folder: &str, filename: &str) -> Result<GeoData, AppError> {
+    pub async fn save<T: GeoDataParser>(self, folder: &str, filename: &str) -> Result<T, AppError> {
         tokio::fs::create_dir_all(format!("{}/download", folder)).await?;
         let path = format!("{}/download/{}", folder, filename);
         let mut file = tokio::fs::File::create(&path).await?;
         file.write_all(&self.body).await?;
         info!("data saved to {path}");
-        Ok(GeoData::new(self.body))
-    }
-}
-
-/// A downloaded geo IP data archive (ZIP bytes). Provider-agnostic; the
-/// provider parser (see [`crate::iplist::parse`]) consumes it.
-pub struct GeoData {
-    pub body: Vec<u8>,
-}
-
-pub trait GeoDataParser {
-    fn parse<T: for<'de> Deserialize<'de>>(
-        &self,
-        name: &str,
-    ) -> impl Future<Output = Result<Vec<T>, AppError>>;
-}
-
-impl GeoData {
-    pub fn new(body: Vec<u8>) -> Self {
-        Self { body }
+        Ok(T::new(self.body))
     }
 }
