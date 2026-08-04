@@ -161,15 +161,3 @@ where
 
     parsed
 }
-
-pub fn join_ips<T>(ips: &[T]) -> String
-where
-    T: ListNetwork + FromStr + Display + std::fmt::Debug,
-    <T as FromStr>::Err: Display,
-    AppError: From<<T as FromStr>::Err>,
-{
-    ips.iter()
-        .map(|ip| ip.to_string())
-        .collect::<Vec<String>>()
-        .join("\n")
-}

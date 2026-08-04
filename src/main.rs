@@ -69,7 +69,7 @@ impl AppState {
     }
 }
 
-#[tokio::main]
+#[tokio::main(worker_threads = 6)]
 async fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
 

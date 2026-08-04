@@ -1,28 +1,32 @@
 use crate::AppState;
-use crate::blocklist::fetch::join_ips;
 use crate::error::AppError;
 use crate::forms::IpVersion;
 use crate::forms::blocklist::BlocklistIpVersion;
 use crate::forms::extractors::AppQuery;
 use axum::extract::State;
 use axum::response::IntoResponse;
+use ipnetwork::IpNetwork;
 use std::sync::Arc;
 
 pub async fn get_blocklist(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<BlocklistIpVersion>,
 ) -> Result<impl IntoResponse, AppError> {
-    let out: String = match form.version {
+    let blocklist = state.blocklist_ranges.read().await;
+
+    let formatted = match form.version {
+        Some(IpVersion::Ipv4) => form.format.format(&blocklist.ipv4, Some("blocklist")),
+        Some(IpVersion::Ipv6) => form.format.format(&blocklist.ipv6, Some("blocklist")),
         None => {
-            let mut res = join_ips(&state.blocklist_ranges.read().await.ipv4);
-            res.push('\n');
-            res.push_str(&join_ips(&state.blocklist_ranges.read().await.ipv6));
-            res
+            let ips = blocklist
+                .ipv4
+                .iter()
+                .map(|net| IpNetwork::from(*net))
+                .chain(blocklist.ipv6.iter().map(|net| IpNetwork::from(*net)))
+                .collect::<Vec<_>>();
+            form.format.format(&ips, Some("blocklist"))
         }
-        Some(ver) => match ver {
-            IpVersion::Ipv4 => join_ips(&state.blocklist_ranges.read().await.ipv4),
-            IpVersion::Ipv6 => join_ips(&state.blocklist_ranges.read().await.ipv6),
-        },
     };
-    Ok(out)
+
+    Ok(formatted)
 }

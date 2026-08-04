@@ -130,22 +130,24 @@
                 </div>
             </div>
 
-            <div class="mb-6">
-                <label for="version-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Version:</label>
-                <select id="version-select" bind:value={version} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
-                    <option value="">All</option>
-                    <option value="ipv4">IPv4</option>
-                    <option value="ipv6">IPv6</option>
-                </select>
-            </div>
+            <div class="mb-6 flex flex-wrap gap-6">
+                <div>
+                    <label for="version-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Version:</label>
+                    <select id="version-select" bind:value={version} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+                        <option value="">All</option>
+                        <option value="ipv4">IPv4</option>
+                        <option value="ipv6">IPv6</option>
+                    </select>
+                </div>
 
-            <div class="mb-6">
-                <label for={formatId} class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>
-                <select id={formatId} bind:value={format} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
-                    <option value="Json">JSON</option>
-                    <option value="Text">Text</option>
-                    <option value="Nftables">Nftables</option>
-                </select>
+                <div>
+                    <label for={formatId} class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Output Format:</label>
+                    <select id={formatId} bind:value={format} class="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all">
+                        <option value="Json">JSON</option>
+                        <option value="Text">Text</option>
+                        <option value="Nftables">Nftables</option>
+                    </select>
+                </div>
             </div>
 
             <div class="relative">

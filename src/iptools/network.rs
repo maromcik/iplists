@@ -1,5 +1,5 @@
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
-use ipnetwork::{Ipv4Network, Ipv6Network};
+use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use std::{
     fmt::{Debug, Display},
     net::IpAddr,
@@ -292,11 +292,47 @@ impl ListNetwork for Ipv6Network {
     }
 
     fn is_ipv4(&self) -> bool {
-        true
+        false
     }
 
     fn is_ipv6(&self) -> bool {
-        false
+        true
+    }
+}
+
+impl ListNetwork for IpNetwork {
+    fn address(&self) -> IpAddr {
+        match self {
+            IpNetwork::V4(net) => IpAddr::V4(net.ip()),
+            IpNetwork::V6(net) => IpAddr::V6(net.ip()),
+        }
+    }
+
+    fn trie_key(&self) -> TrieKey {
+        match self {
+            IpNetwork::V4(net) => TrieKey::new(BitIp::Ipv4(net.network().to_bits()), net.prefix()),
+            IpNetwork::V6(net) => TrieKey::new(BitIp::Ipv6(net.network().to_bits()), net.prefix()),
+        }
+    }
+
+    fn network_prefix(&self) -> u8 {
+        self.prefix()
+    }
+
+    fn network_string(&self) -> String {
+        self.to_string()
+    }
+
+    fn is_net(&self) -> bool {
+        self.network() == self.ip()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        matches!(self, IpNetwork::V4(_))
+    }
+
+    fn is_ipv6(&self) -> bool {
+        matches!(self, IpNetwork::V6(_))
     }
 }
 
