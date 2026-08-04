@@ -69,12 +69,25 @@ impl AppState {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), AppError> {
+fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
-
     let config = AppConfig::parse_config(&cli.config)?;
 
+    let worker_threads = config.workers.unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map(std::num::NonZero::get)
+            .unwrap_or(1)
+    });
+
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(run(config))
+}
+
+async fn run(config: AppConfig) -> Result<(), AppError> {
     let env = EnvFilter::new(
         format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str(),
     );

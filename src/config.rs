@@ -30,6 +30,8 @@ pub struct AppConfig {
     pub all_log_level: String,
     #[serde(default = "default_static_files")]
     pub static_files_path: String,
+    #[serde(default)]
+    pub workers: Option<usize>,
     pub tls_cert_path: Option<String>,
     pub tls_key_path: Option<String>,
 }

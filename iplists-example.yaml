@@ -1,5 +1,7 @@
 app_log_level: debug
 all_log_level: info
+# tokio worker threads; defaults to the number of CPU threads
+#workers: 8
 #tls_cert_path: <path>/fullchain.pem
 #tls_key_path: <path>/privkey.pem
 #hostnames:
