@@ -7,7 +7,7 @@ fn default_timeout() -> std::time::Duration {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BlocklistConfig {
-    pub url_blocklist: UrlBlocklist,
+    pub url_blocklist: Vec<UrlBlocklist>,
     pub custom_blocklist: CustomListConfig,
     pub custom_allowlist: CustomListConfig,
     pub interval: String,
@@ -23,8 +23,10 @@ pub struct CustomListConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UrlBlocklist {
-    pub ipv4_url: String,
-    pub ipv6_url: String,
+    #[serde(default)]
+    pub ipv4_url: Option<String>,
+    #[serde(default)]
+    pub ipv6_url: Option<String>,
     pub headers: Option<HashMap<String, String>>,
     #[serde(default = "default_timeout")]
     #[serde(with = "humantime_serde")]

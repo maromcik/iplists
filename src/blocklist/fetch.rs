@@ -1,4 +1,4 @@
-use crate::blocklist::config::{BlocklistConfig, CustomListConfig};
+use crate::blocklist::config::{BlocklistConfig, CustomListConfig, UrlBlocklist};
 use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
 use crate::iptools::network::ListNetwork;
@@ -25,12 +25,15 @@ impl BlocklistRanges {
     pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
-        match BlocklistRanges::download(&config.clone()).await {
-            Ok(ranges) => merged.merge(ranges),
-            Err(e) => {
-                error!("failed to download blocklist: {}", e);
+
+        for blocklist in &config.url_blocklist {
+            match BlocklistRanges::download(blocklist).await {
+                Ok(ranges) => merged.merge(ranges),
+                Err(e) => {
+                    error!("failed to download blocklist from: {}", e);
+                }
             }
-        };
+        }
 
         debug!("loading custom blocklist ranges");
         match BlocklistRanges::load_custom_lists(&config.custom_blocklist).await {
@@ -79,12 +82,19 @@ impl BlocklistRanges {
         result.deduplicate()
     }
 
-    pub async fn download(config: &BlocklistConfig) -> Result<BlocklistRanges, AppError> {
-        let ipv4 = fetch_blocklist(config, &config.url_blocklist.ipv4_url).await?;
-        let ipv6 = fetch_blocklist(config, &config.url_blocklist.ipv6_url).await?;
-
-        let ipv4 = validate_subnets::<Ipv4Net>(&ipv4, None);
-        let ipv6 = validate_subnets::<Ipv6Net>(&ipv6, None);
+    pub async fn download(config: &UrlBlocklist) -> Result<BlocklistRanges, AppError> {
+        let ipv4 = if let Some(url) = &config.ipv4_url {
+            let ips = fetch_blocklist(config, url).await?;
+            validate_subnets::<Ipv4Net>(&ips, None)
+        } else {
+            Vec::new()
+        };
+        let ipv6 = if let Some(url) = &config.ipv6_url {
+            let ips = fetch_blocklist(config, url).await?;
+            validate_subnets::<Ipv6Net>(&ips, None)
+        } else {
+            Vec::new()
+        };
 
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
@@ -141,17 +151,12 @@ where
     ranges.extend(validated);
 }
 
-async fn fetch_blocklist(
-    config: &BlocklistConfig,
-    endpoint: &str,
-) -> Result<Vec<String>, AppError> {
-    let client = reqwest::Client::builder()
-        .timeout(config.url_blocklist.timeout)
-        .build()?;
+async fn fetch_blocklist(config: &UrlBlocklist, endpoint: &str) -> Result<Vec<String>, AppError> {
+    let client = reqwest::Client::builder().timeout(config.timeout).build()?;
 
     let mut req = client.get(endpoint);
 
-    if let Some(headers) = &config.url_blocklist.headers {
+    if let Some(headers) = &config.headers {
         for (k, v) in headers {
             req = req.header(k, v);
         }
@@ -159,8 +164,7 @@ async fn fetch_blocklist(
 
     let body = req.send().await?.error_for_status()?.text().await?;
 
-    let blocklist =
-        parse_from_string::<&str>(body.trim(), config.url_blocklist.split_string.as_deref());
+    let blocklist = parse_from_string::<&str>(body.trim(), config.split_string.as_deref());
 
     debug!("blocklist fetched from: {endpoint}");
     Ok(blocklist)
