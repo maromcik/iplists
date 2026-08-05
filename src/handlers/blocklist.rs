@@ -5,7 +5,7 @@ use crate::forms::blocklist::BlocklistIpVersion;
 use crate::forms::extractors::AppQuery;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use ipnetwork::IpNetwork;
+use ipnet::IpNet;
 use std::sync::Arc;
 
 pub async fn get_blocklist(
@@ -21,8 +21,8 @@ pub async fn get_blocklist(
             let ips = blocklist
                 .ipv4
                 .iter()
-                .map(|net| IpNetwork::from(*net))
-                .chain(blocklist.ipv6.iter().map(|net| IpNetwork::from(*net)))
+                .map(|net| IpNet::from(*net))
+                .chain(blocklist.ipv6.iter().map(|net| IpNet::from(*net)))
                 .collect::<Vec<_>>();
             form.format.format(&ips, Some("blocklist"))
         }

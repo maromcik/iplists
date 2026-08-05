@@ -1,6 +1,7 @@
 use std::net::IpAddr;
 
-use crate::iptools::network::ListNetwork;
+use crate::error::AppError;
+use crate::iptools::network::{ListNetwork, Splitable};
 
 #[derive(Copy, Clone)]
 pub struct TrieKey {
@@ -113,7 +114,7 @@ impl<T: ListNetwork> Default for TrieNode<T> {
 }
 
 #[allow(dead_code)]
-impl<T: ListNetwork> TrieNode<T> {
+impl<T: ListNetwork + Splitable<Output = T>> TrieNode<T> {
     /// Creates a new and defaulted `TrieNode` instance.
     ///
     /// # Returns
@@ -180,6 +181,60 @@ impl<T: ListNetwork> TrieNode<T> {
             .as_ref()
             .filter(|&value| value.is_ipv4() == address.addr.is_ipv4())
     }
+
+    /// Subtracts the networks stored in this subtree (set B) from `network`.
+    ///
+    /// `depth` is the node's distance from the root, i.e. how many bits of
+    /// `network` have already been matched. Subnets of `network` that are not
+    /// covered by any stored network are appended to `acc`.
+    ///
+    /// Relies on the insert-time invariant that a node either holds a value
+    /// (with no children) or every child subtree contains a stored network.
+    fn subtract(&self, network: &T, depth: u8, acc: &mut Vec<T>) -> Result<(), AppError> {
+        // A stored same-family network on the walked path is a supernet
+        // of (or equal to) `network`: it is fully covered, nothing remains.
+        if let Some(stored) = self.value.as_ref()
+            && stored.is_ipv4() == network.is_ipv4()
+        {
+            return Ok(());
+        }
+
+        // A host route cannot be split and cannot contain stored subnets.
+        if depth == network.trie_key().addr.max_prefix() {
+            acc.push(network.clone());
+            return Ok(());
+        }
+
+        if depth == network.network_prefix() {
+            // All bits consumed: B can only overlap via subnets strictly
+            // inside `network`. If there are none, the whole stays.
+            if self.children.iter().all(Option::is_none) {
+                acc.push(network.clone());
+                return Ok(());
+            }
+            // Partial overlap: split `network` and subtract each half from
+            // the matching child subtree.
+            let (a, b) = network.split()?;
+            for half in [a, b] {
+                let bit = half.trie_key().bit(depth) as usize;
+                match &self.children[bit] {
+                    Some(child) => child.subtract(&half, depth + 1, acc)?,
+                    None => acc.push(half),
+                }
+            }
+            return Ok(());
+        }
+
+        let bit = network.trie_key().bit(depth) as usize;
+        match &self.children[bit] {
+            Some(child) => child.subtract(network, depth + 1, acc),
+            None => {
+                // No stored network anywhere in this subtree: disjoint.
+                acc.push(network.clone());
+                Ok(())
+            }
+        }
+    }
 }
 
 /// A prefix trie for IP networks that supports insertion and host-address lookup.
@@ -190,7 +245,7 @@ pub struct IPTrie<T: ListNetwork> {
 }
 
 #[allow(dead_code)]
-impl<T: ListNetwork> IPTrie<T> {
+impl<T: ListNetwork + Splitable<Output = T>> IPTrie<T> {
     /// Creates an empty `IPTrie`.
     pub fn new() -> Self {
         Self {
@@ -214,9 +269,18 @@ impl<T: ListNetwork> IPTrie<T> {
     pub fn lookup(&self, address: TrieKey) -> Option<&T> {
         self.root.lookup(address)
     }
+
+    /// Computes `network − B`: returns the subnets of `network` that are not
+    /// covered by any network stored in this trie. The remainder is produced
+    /// by splitting `network` only as far as needed.
+    pub fn subtract(&self, network: &T) -> Result<Vec<T>, AppError> {
+        let mut acc = Vec::new();
+        self.root.subtract(network, 0, &mut acc)?;
+        Ok(acc)
+    }
 }
 
-impl<T: ListNetwork> Default for IPTrie<T> {
+impl<T: ListNetwork + Splitable<Output = T>> Default for IPTrie<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -265,7 +329,7 @@ impl<T: ListNetwork> Default for IPTrie<T> {
 ///     a height-dependent complexity of `h`, which is 32 for IPv4 and 128 for IPv6.
 pub fn deduplicate<T>(ips: Vec<T>) -> Vec<T>
 where
-    T: ListNetwork,
+    T: ListNetwork + Splitable<Output = T>,
 {
     let mut networks = ips;
     networks.sort_by_key(ListNetwork::network_prefix);
@@ -281,7 +345,7 @@ where
 
 pub fn build<T>(ips: Vec<T>) -> IPTrie<T>
 where
-    T: ListNetwork,
+    T: ListNetwork + Splitable<Output = T>,
 {
     let mut networks = ips;
     networks.sort_by_key(ListNetwork::network_prefix);
@@ -290,4 +354,68 @@ where
         root.insert(&ip);
     }
     IPTrie { root }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ipnet::IpNet;
+
+    fn net(s: &str) -> IpNet {
+        s.parse().unwrap()
+    }
+
+    fn subtract_all(trie: &IPTrie<IpNet>, a: &[&str]) -> Vec<IpNet> {
+        let mut result = Vec::new();
+        for s in a {
+            result.extend(trie.subtract(&net(s)).unwrap());
+        }
+        result
+    }
+
+    #[test]
+    fn subtract_example_from_issue() {
+        // A = {1.1.1.1, 8.8.8.8, 192.168.0.0/24}
+        // B = {8.8.8.8, 192.168.0.0/25}
+        // A - B = {1.1.1.1, 192.168.0.128/25}
+        let b = build(vec![net("8.8.8.8/32"), net("192.168.0.0/25")]);
+        let result = subtract_all(&b, &["1.1.1.1/32", "8.8.8.8/32", "192.168.0.0/24"]);
+        assert_eq!(result, vec![net("1.1.1.1/32"), net("192.168.0.128/25")]);
+    }
+
+    #[test]
+    fn subtract_exact_match_is_covered() {
+        let b = build(vec![net("192.168.0.0/24")]);
+        assert!(subtract_all(&b, &["192.168.0.0/24"]).is_empty());
+    }
+
+    #[test]
+    fn subtract_supernet_covers() {
+        let b = build(vec![net("192.168.0.0/24")]);
+        assert!(subtract_all(&b, &["192.168.0.0/25", "192.168.0.200/32"]).is_empty());
+    }
+
+    #[test]
+    fn subtract_disjoint_keeps_whole() {
+        let b = build(vec![net("192.168.0.0/24")]);
+        assert_eq!(subtract_all(&b, &["10.0.0.0/8"]), vec![net("10.0.0.0/8")]);
+    }
+
+    #[test]
+    fn subtract_nested_splits() {
+        // A has 192.168.0.0/24, B has the first /25 and the first half of the second.
+        let b = build(vec![net("192.168.0.0/25"), net("192.168.0.128/26")]);
+        assert_eq!(
+            subtract_all(&b, &["192.168.0.0/24"]),
+            vec![net("192.168.0.192/26")]
+        );
+    }
+
+    #[test]
+    fn subtract_does_not_mutate_trie() {
+        let b = build(vec![net("192.168.0.0/25")]);
+        let first = subtract_all(&b, &["192.168.0.0/24"]);
+        let second = subtract_all(&b, &["192.168.0.0/24"]);
+        assert_eq!(first, second);
+    }
 }

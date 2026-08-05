@@ -229,7 +229,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
     let state_local = state.clone();
     scheduler
         .add(Job::new_async(
-            &config.blocklist.download_cron,
+            &config.blocklist.interval,
             move |_uuid, _lock| {
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();

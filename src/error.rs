@@ -23,8 +23,6 @@ pub enum AppError {
     NotFound(String),
     #[error("Bad request: {0}")]
     BadRequest(String),
-    #[error("Templating error: {0}")]
-    TemplatingError(String),
     #[error("Identity error: {0}")]
     IdentityError(String),
     #[error("Session error: {0}")]
@@ -51,6 +49,8 @@ pub enum AppError {
     DatetimeError(String),
     #[error("Scheduler error: {0}")]
     SchedulerError(String),
+    #[error("Address manipulation error: {0}")]
+    AddressManipulationError(String),
 }
 
 impl Debug for AppError {
@@ -68,12 +68,6 @@ impl From<zip::result::ZipError> for AppError {
 impl From<JoinError> for AppError {
     fn from(value: JoinError) -> Self {
         Self::InternalServerError(value.to_string())
-    }
-}
-
-impl From<askama::Error> for AppError {
-    fn from(error: askama::Error) -> Self {
-        Self::TemplatingError(error.to_string())
     }
 }
 
@@ -157,6 +151,12 @@ impl From<time::error::IndeterminateOffset> for AppError {
 impl From<tokio_cron_scheduler::JobSchedulerError> for AppError {
     fn from(e: tokio_cron_scheduler::JobSchedulerError) -> Self {
         AppError::SchedulerError(e.to_string())
+    }
+}
+
+impl From<ipnet::PrefixLenError> for AppError {
+    fn from(e: ipnet::PrefixLenError) -> Self {
+        AppError::AddressManipulationError(e.to_string())
     }
 }
 

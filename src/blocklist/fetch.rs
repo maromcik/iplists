@@ -1,8 +1,8 @@
-use crate::blocklist::config::BlocklistConfig;
+use crate::blocklist::config::{BlocklistConfig, CustomListConfig};
 use crate::error::AppError;
-use crate::iptools::iptrie::deduplicate;
+use crate::iptools::iptrie::{build, deduplicate};
 use crate::iptools::network::ListNetwork;
-use ipnetwork::{Ipv4Network, Ipv6Network};
+use ipnet::{Ipv4Net, Ipv6Net};
 use log::{debug, error, warn};
 use std::fmt::Display;
 use std::str::FromStr;
@@ -10,11 +10,18 @@ use tokio::fs::DirEntry;
 
 #[derive(Default, Debug)]
 pub struct BlocklistRanges {
-    pub ipv4: Vec<Ipv4Network>,
-    pub ipv6: Vec<Ipv6Network>,
+    pub ipv4: Vec<Ipv4Net>,
+    pub ipv6: Vec<Ipv6Net>,
 }
 
 impl BlocklistRanges {
+    pub fn deduplicate(self) -> BlocklistRanges {
+        BlocklistRanges {
+            ipv4: deduplicate(self.ipv4),
+            ipv6: deduplicate(self.ipv6),
+        }
+    }
+
     pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
@@ -25,30 +32,64 @@ impl BlocklistRanges {
             }
         };
 
-        debug!("loading custom ranges");
-        match BlocklistRanges::load(&config.clone()).await {
+        debug!("loading custom blocklist ranges");
+        match BlocklistRanges::load_custom_lists(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
-                error!("failed to load custom ranges: {}", e);
+                error!("failed to load custom blocklist ranges: {}", e);
             }
         };
-        merged
+
+        debug!("loading custom allowlist ranges");
+        let allowlist = match BlocklistRanges::load_custom_lists(&config.custom_allowlist).await {
+            Ok(ranges) => ranges,
+            Err(e) => {
+                error!("failed to load custom allowlist ranges: {}", e);
+                warn!("returning blocklist without allowlist");
+                return merged.deduplicate();
+            }
+        };
+
+        let ipv4_allowlist_trie = build(allowlist.ipv4);
+        let ipv6_allowlist_trie = build(allowlist.ipv6);
+        let mut ipv4_blocklist = Vec::new();
+        let mut ipv6_blocklist = Vec::new();
+
+        for ip in merged.ipv4 {
+            let Ok(disjoint) = ipv4_allowlist_trie.subtract(&ip) else {
+                warn!("failed to subtract IPv4 allowlist from IP: {}", ip);
+                continue;
+            };
+            ipv4_blocklist.extend(disjoint);
+        }
+
+        for ip in merged.ipv6 {
+            let Ok(disjoint) = ipv6_allowlist_trie.subtract(&ip) else {
+                warn!("failed to subtract IPv6 allowlist from IP: {}", ip);
+                continue;
+            };
+            ipv6_blocklist.extend(disjoint);
+        }
+
+        let result = BlocklistRanges {
+            ipv4: ipv4_blocklist,
+            ipv6: ipv6_blocklist,
+        };
+
+        result.deduplicate()
     }
 
     pub async fn download(config: &BlocklistConfig) -> Result<BlocklistRanges, AppError> {
-        let ipv4 = fetch_blocklist(config, &config.ipv4_url).await?;
-        let ipv6 = fetch_blocklist(config, &config.ipv6_url).await?;
+        let ipv4 = fetch_blocklist(config, &config.url_blocklist.ipv4_url).await?;
+        let ipv6 = fetch_blocklist(config, &config.url_blocklist.ipv6_url).await?;
 
-        let ipv4 = validate_subnets::<Ipv4Network>(&ipv4, None);
-        let ipv6 = validate_subnets::<Ipv6Network>(&ipv6, None);
-
-        let ipv4 = deduplicate(ipv4);
-        let ipv6 = deduplicate(ipv6);
+        let ipv4 = validate_subnets::<Ipv4Net>(&ipv4, None);
+        let ipv6 = validate_subnets::<Ipv6Net>(&ipv6, None);
 
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
-    pub async fn load(config: &BlocklistConfig) -> Result<BlocklistRanges, AppError> {
+    pub async fn load_custom_lists(config: &CustomListConfig) -> Result<BlocklistRanges, AppError> {
         tokio::fs::create_dir_all(&config.ipv4_folder).await?;
         tokio::fs::create_dir_all(&config.ipv6_folder).await?;
         let mut ipv4_files = tokio::fs::read_dir(&config.ipv4_folder).await?;
@@ -75,7 +116,7 @@ impl BlocklistRanges {
     }
 }
 
-async fn read_file<T>(f: DirEntry, ranges: &mut Vec<T>, config: &BlocklistConfig)
+async fn read_file<T>(f: DirEntry, ranges: &mut Vec<T>, config: &CustomListConfig)
 where
     T: ListNetwork + FromStr + Display + std::fmt::Debug,
     <T as FromStr>::Err: Display,
@@ -104,11 +145,13 @@ async fn fetch_blocklist(
     config: &BlocklistConfig,
     endpoint: &str,
 ) -> Result<Vec<String>, AppError> {
-    let client = reqwest::Client::builder().timeout(config.timeout).build()?;
+    let client = reqwest::Client::builder()
+        .timeout(config.url_blocklist.timeout)
+        .build()?;
 
     let mut req = client.get(endpoint);
 
-    if let Some(headers) = &config.headers {
+    if let Some(headers) = &config.url_blocklist.headers {
         for (k, v) in headers {
             req = req.header(k, v);
         }
@@ -116,7 +159,8 @@ async fn fetch_blocklist(
 
     let body = req.send().await?.error_for_status()?.text().await?;
 
-    let blocklist = parse_from_string::<&str>(body.trim(), config.split_string.as_deref());
+    let blocklist =
+        parse_from_string::<&str>(body.trim(), config.url_blocklist.split_string.as_deref());
 
     debug!("blocklist fetched from: {endpoint}");
     Ok(blocklist)

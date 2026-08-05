@@ -1,6 +1,6 @@
 [package]
 name = "iplists"
-version = "1.8.10"
+version = "2.0.0"
 edition = "2024"
 
 [dependencies]
@@ -11,7 +11,6 @@ log = "0.4.29"
 thiserror = "2.0.17"
 ipnetwork = { version = "0.21.1", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive", "std", "rc"] }
-askama = "0.16.0"
 itertools = "0.15.0"
 clap = {version = "4.5.53", features = ["default", "derive", "env"]}
 dotenvy = "0.15.7"
