@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-#[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
     Json,
     Text,
     Nftables,
+    NftablesNamedSets,
 }
 
 impl OutputFormat {
@@ -32,6 +32,49 @@ impl OutputFormat {
                 OutputFormat::Json,
             ),
             OutputFormat::Nftables => {
+                let mut output = String::new();
+                let mut output6 = String::new();
+                output.push_str(
+                    format!(
+                        "\ndefine {}_ipv4 {{ \n",
+                        set_name.unwrap_or("list").to_lowercase()
+                    )
+                    .as_str(),
+                );
+                output6.push_str(
+                    format!(
+                        "\ndefine {}_ipv6 {{ \n",
+                        set_name.unwrap_or("list").to_lowercase()
+                    )
+                    .as_str(),
+                );
+                let mut ipv4: bool = false;
+                let mut ipv6: bool = false;
+                for ip in data {
+                    if ip.is_ipv4() {
+                        output.push_str(&format!("\t{},\n", ip.network_string()));
+                        ipv4 = true;
+                    } else {
+                        output6.push_str(&format!("\t{},\n", ip.network_string()));
+                        ipv6 = true;
+                    }
+                }
+                output.push_str("}\n\n");
+                output6.push_str("}\n\n");
+                let output = match (ipv4, ipv6) {
+                    (true, true) => {
+                        output.push('\n');
+                        output.push_str(output6.as_str());
+                        output
+                    }
+                    (true, false) => output,
+                    (false, true) => output6,
+                    (false, false) => "".to_string(),
+                };
+
+                FormattedOutput::new(output, OutputFormat::Nftables)
+            }
+            OutputFormat::NftablesNamedSets => {
                 let mut output = String::new();
                 let mut output6 = String::new();
                 output.push_str(
@@ -109,6 +152,7 @@ impl IntoResponse for FormattedOutput {
                 .into_response(),
 
             OutputFormat::Nftables => self.output.into_response(),
+            OutputFormat::NftablesNamedSets => self.output.into_response(),
         }
     }
 }

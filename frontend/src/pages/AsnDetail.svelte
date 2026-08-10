@@ -10,9 +10,8 @@
 
     const params = new URLSearchParams(window.location.search);
     let asn = params.get('asn');
-    let formatParam = params.get('format');
     let version = params.get('version') || "";
-    let format = formatParam ? formatParam.charAt(0).toUpperCase() + formatParam.slice(1) : "Json";
+    let format = params.get('format') || "Json";
 
     if (asn) {
         asnInput = asn;
@@ -29,7 +28,7 @@
         error = null;
         ips = "";
 
-        const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
+        const apiUrl = `/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
 
         try {
             const text = await apiFetchText(apiUrl);
@@ -55,7 +54,7 @@
 
         const newParams = new URLSearchParams();
         newParams.set('asn', asn);
-        newParams.set('format', format.toLowerCase());
+        newParams.set('format', format);
         if (version) {
             newParams.set('version', version);
         }
@@ -117,7 +116,7 @@
     {:else if error}
         <ErrorAlert error={error} title="Could not load ASN ranges" />
     {:else if asn}
-        {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`}
+        {@const url = `${window.location.origin}/api/iplist/asn?asn=${encodeURIComponent(asn)}&format=${format}${version ? `&version=${encodeURIComponent(version)}` : ''}`}
         <div class="mb-6 p-4 bg-gray-100 dark:bg-gray-800 rounded-xl">
             <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Query:</h4>
             <div class="bg-gray-900 text-amber-500 p-3 rounded-lg font-mono text-sm break-all flex justify-between items-center gap-2">
@@ -150,6 +149,7 @@
                     <option value="Json">JSON</option>
                     <option value="Text">Text</option>
                     <option value="Nftables">Nftables</option>
+                    <option value="NftablesNamedSets">Nftables Named Sets</option>
                 </select>
             </div>
         </div>

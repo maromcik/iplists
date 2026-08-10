@@ -10,9 +10,8 @@
     const params = new URLSearchParams(window.location.search);
     let country = params.get('country');
     let continent = params.get('continent');
-    let formatParam = params.get('format');
+    let format = params.get('format') || "Json";
     let version = params.get('version') || "";
-    let format = formatParam ? formatParam.charAt(0).toUpperCase() + formatParam.slice(1) : "Json";
 
     let locationValue = country || continent || "";
     let locationType = country ? "country" : (continent ? "continent" : "");
@@ -29,7 +28,7 @@
         ips = "";
 
         try {
-            const text = await apiFetchText(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`);
+            const text = await apiFetchText(`/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format}${version ? `&version=${encodeURIComponent(version)}` : ''}`);
 
             if (format === 'Json') {
                 try {
@@ -53,7 +52,7 @@
         const newParams = new URLSearchParams();
         if (country) newParams.set('country', country);
         if (continent) newParams.set('continent', continent);
-        newParams.set('format', format.toLowerCase());
+        newParams.set('format', format);
         if (version) newParams.set('version', version);
         const newUrl = `/location?${newParams.toString()}`;
         if (window.location.pathname + window.location.search !== newUrl) {
@@ -81,7 +80,7 @@
 
     // Reactively fetch when format or version changes
     $: format, version, fetchIps();
-    $: apiUrl = `${window.location.origin}/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format.toLowerCase()}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
+    $: apiUrl = `${window.location.origin}/api/iplist/location?${locationType}=${encodeURIComponent(locationValue)}&format=${format}${version ? `&version=${encodeURIComponent(version)}` : ''}`;
 </script>
 
 <div class="w-full max-w-4xl mx-auto p-4">
@@ -146,6 +145,7 @@
                         <option value="Json">JSON</option>
                         <option value="Text">Text</option>
                         <option value="Nftables">Nftables</option>
+                        <option value="NftablesNamedSets">Nftables Named Sets</option>
                     </select>
                 </div>
             </div>
