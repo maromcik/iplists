@@ -36,14 +36,14 @@ impl OutputFormat {
                 let mut output6 = String::new();
                 output.push_str(
                     format!(
-                        "\ndefine {}_ipv4 {{ \n",
+                        "\ndefine {}_ipv4 = {{ \n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
                 );
                 output6.push_str(
                     format!(
-                        "\ndefine {}_ipv6 {{ \n",
+                        "\ndefine {}_ipv6 = {{ \n",
                         set_name.unwrap_or("list").to_lowercase()
                     )
                     .as_str(),
