@@ -22,7 +22,7 @@
     });
 
     function selectContinent(continent: string) {
-        navigate(`/location?continent=${encodeURIComponent(continent)}&format=json`);
+        navigate(`/location?continent=${encodeURIComponent(continent)}&format=Json`);
     }
 </script>
 

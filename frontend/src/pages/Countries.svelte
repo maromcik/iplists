@@ -22,7 +22,7 @@
     });
 
     function selectCountry(country: Location) {
-        navigate(`/location?country=${country.code}&format=json`);
+        navigate(`/location?country=${country.code}&format=Json`);
     }
 </script>
 
