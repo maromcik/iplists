@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { link } from "svelte-routing";
     import { apiFetchJson, ApiRequestError } from "../js/api";
     import ErrorAlert from "../component/ErrorAlert.svelte";
     import { AppErrorKind, type ApiError, type CombinedIpRange } from "../js/types";
@@ -113,7 +114,9 @@
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">ASN</dt>
-                    <dd class="text-sm font-mono text-gray-900 dark:text-gray-100 sm:col-span-2">{result.asn}</dd>
+                    <dd class="text-sm font-mono text-gray-900 dark:text-gray-100 sm:col-span-2">
+                        <a href={`/asn?asn=${encodeURIComponent(result.asn)}`} use:link class="text-amber-600 dark:text-amber-500 hover:underline">{result.asn}</a>
+                    </dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">ISP</dt>
@@ -121,11 +124,15 @@
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Country</dt>
-                    <dd class="text-sm text-gray-900 dark:text-gray-100 sm:col-span-2">{result.location.name} ({result.location.code})</dd>
+                    <dd class="text-sm font-mono text-gray-900 dark:text-gray-100 sm:col-span-2">
+                        <a href={`/location?country=${encodeURIComponent(result.location.code)}`} use:link class="text-amber-600 dark:text-amber-500 hover:underline">{result.location.name} ({result.location.code})</a>
+                    </dd>
                 </div>
                 <div class="py-3 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
                     <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Continent</dt>
-                    <dd class="text-sm text-gray-900 dark:text-gray-100 sm:col-span-2">{result.location.continent}</dd>
+                    <dd class="text-sm font-mono text-gray-900 dark:text-gray-100 sm:col-span-2">
+                        <a href={`/location?continent=${encodeURIComponent(result.location.continent)}`} use:link class="text-amber-600 dark:text-amber-500 hover:underline">{result.location.continent}</a>
+                    </dd>
                 </div>
             </dl>
         </div>

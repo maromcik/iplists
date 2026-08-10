@@ -286,33 +286,6 @@ impl<T: ListNetwork + Splitable<Output = T>> Default for IPTrie<T> {
     }
 }
 
-// original version before auto-merge
-// #[must_use]
-// pub fn deduplicate<T>(ips: Option<Vec<T>>) -> Option<Vec<T>>
-// where
-//     T: ListNetwork,
-// {
-//     let mut ips = ips?;
-//     ips.sort_by_key(ListNetwork::network_prefix);
-//     let mut root = TrieNode::new();
-//     let mut result = Vec::new();
-//     for ip in ips {
-//         if root.insert(&ip) {
-//             result.push(ip);
-//         }
-//     }
-//     Some(result)
-// }
-
-// bypass deduplication
-// #[must_use]
-// pub fn deduplicate<T>(ips: Option<Vec<NetworkType<T>>>) -> Option<Vec<NetworkType<T>>>
-// where
-//     T: ListNetwork,
-// {
-//     ips
-// }
-
 /// deduplicate only IPs/Subnets not ranges
 /// Deduplicates a collection of IP prefixes by using a prefix trie to organize them.
 /// This ensures that redundant, more specific subnets are removed.
