@@ -11,6 +11,7 @@ use axum::routing::get;
 use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
+use ipnet::{Ipv4Net, Ipv6Net};
 use log::{debug, error, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
@@ -53,7 +54,7 @@ struct Cli {
 pub struct AppState {
     pub config: AppConfig,
     pub ip_ranges: RwLock<IpRanges>,
-    pub blocklist_ranges: RwLock<BlocklistRanges>,
+    pub blocklist_ranges: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
 }
 
 impl AppState {

@@ -1,28 +1,58 @@
 use crate::blocklist::config::{BlocklistConfig, CustomListConfig, UrlBlocklist};
 use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
-use crate::iptools::network::ListNetwork;
-use ipnet::{Ipv4Net, Ipv6Net};
+use crate::iptools::network::{ListNetwork, Splitable};
 use log::{debug, error, warn};
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use tokio::fs::DirEntry;
 
-#[derive(Default, Debug)]
-pub struct BlocklistRanges {
-    pub ipv4: Vec<Ipv4Net>,
-    pub ipv6: Vec<Ipv6Net>,
+pub trait BlockListNet:
+    ListNetwork + FromStr<Err: Display> + Display + Splitable<Output = Self>
+{
 }
 
-impl BlocklistRanges {
-    pub fn deduplicate(self) -> BlocklistRanges {
+impl<T> BlockListNet for T where
+    T: ListNetwork + FromStr<Err: Display> + Display + Splitable<Output = T>
+{
+}
+
+#[derive(Debug)]
+pub struct BlocklistRanges<Ipv4, Ipv6>
+where
+    Ipv4: BlockListNet,
+    Ipv6: BlockListNet,
+{
+    pub ipv4: Vec<Ipv4>,
+    pub ipv6: Vec<Ipv6>,
+}
+
+impl<Ipv4, Ipv6> Default for BlocklistRanges<Ipv4, Ipv6>
+where
+    Ipv4: BlockListNet,
+    Ipv6: BlockListNet,
+{
+    fn default() -> Self {
+        Self {
+            ipv4: Vec::new(),
+            ipv6: Vec::new(),
+        }
+    }
+}
+
+impl<Ipv4, Ipv6> BlocklistRanges<Ipv4, Ipv6>
+where
+    Ipv4: BlockListNet,
+    Ipv6: BlockListNet,
+{
+    pub fn deduplicate(self) -> BlocklistRanges<Ipv4, Ipv6> {
         BlocklistRanges {
             ipv4: deduplicate(self.ipv4),
             ipv6: deduplicate(self.ipv6),
         }
     }
 
-    pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges {
+    pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges<Ipv4, Ipv6> {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
 
@@ -36,7 +66,7 @@ impl BlocklistRanges {
         }
 
         debug!("loading custom blocklist ranges");
-        match BlocklistRanges::load_custom_lists(&config.custom_blocklist).await {
+        match BlocklistRanges::load(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
                 error!("failed to load custom blocklist ranges: {}", e);
@@ -44,7 +74,7 @@ impl BlocklistRanges {
         };
 
         debug!("loading custom allowlist ranges");
-        let allowlist = match BlocklistRanges::load_custom_lists(&config.custom_allowlist).await {
+        let allowlist = match BlocklistRanges::load(&config.custom_allowlist).await {
             Ok(ranges) => ranges,
             Err(e) => {
                 error!("failed to load custom allowlist ranges: {}", e);
@@ -82,16 +112,16 @@ impl BlocklistRanges {
         result.deduplicate()
     }
 
-    pub async fn download(config: &UrlBlocklist) -> Result<BlocklistRanges, AppError> {
+    pub async fn download(config: &UrlBlocklist) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
         let ipv4 = if let Some(url) = &config.ipv4_url {
             let ips = fetch_blocklist(config, url).await?;
-            validate_subnets::<Ipv4Net>(&ips, None)
+            validate_subnets(&ips, None)
         } else {
             Vec::new()
         };
         let ipv6 = if let Some(url) = &config.ipv6_url {
             let ips = fetch_blocklist(config, url).await?;
-            validate_subnets::<Ipv6Net>(&ips, None)
+            validate_subnets(&ips, None)
         } else {
             Vec::new()
         };
@@ -99,19 +129,16 @@ impl BlocklistRanges {
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
-    pub async fn load_custom_lists(config: &CustomListConfig) -> Result<BlocklistRanges, AppError> {
-        tokio::fs::create_dir_all(&config.ipv4_folder).await?;
-        tokio::fs::create_dir_all(&config.ipv6_folder).await?;
-        let mut ipv4_files = tokio::fs::read_dir(&config.ipv4_folder).await?;
-        let mut ipv6_files = tokio::fs::read_dir(&config.ipv6_folder).await?;
+    pub async fn load(config: &CustomListConfig) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
         let mut ipv4_ranges = Vec::new();
         let mut ipv6_ranges = Vec::new();
-        while let Ok(Some(f)) = ipv4_files.next_entry().await {
-            read_file(f, &mut ipv4_ranges, config).await;
+        match load_custom_lists(&config.ipv4_folder, config.split_string.as_deref()).await {
+            Ok(r) => ipv4_ranges.extend(r),
+            Err(e) => warn!("could not load the IPv4 list: {e}"),
         }
-
-        while let Ok(Some(f)) = ipv6_files.next_entry().await {
-            read_file(f, &mut ipv6_ranges, config).await;
+        match load_custom_lists(&config.ipv6_folder, config.split_string.as_deref()).await {
+            Ok(r) => ipv6_ranges.extend(r),
+            Err(e) => warn!("could not load the IPv6 list: {e}"),
         }
 
         Ok(BlocklistRanges {
@@ -120,35 +147,78 @@ impl BlocklistRanges {
         })
     }
 
-    pub fn merge(&mut self, other: BlocklistRanges) {
+    pub fn merge(&mut self, other: BlocklistRanges<Ipv4, Ipv6>) {
         self.ipv4.extend(other.ipv4);
         self.ipv6.extend(other.ipv6);
     }
 }
 
-async fn read_file<T>(f: DirEntry, ranges: &mut Vec<T>, config: &CustomListConfig)
-where
-    T: ListNetwork + FromStr + Display + std::fmt::Debug,
-    <T as FromStr>::Err: Display,
-    AppError: From<<T as FromStr>::Err>,
-{
-    let content = match tokio::fs::read_to_string(f.path()).await {
-        Ok(content) => content,
-        Err(e) => {
-            warn!(
-                "custom ranges: file {} could not be open: {e}",
-                f.path().display()
-            );
-            return;
+pub async fn load_custom_lists<T: BlockListNet>(
+    folder: &str,
+    split: Option<&str>,
+) -> Result<Vec<T>, AppError> {
+    tokio::fs::create_dir_all(folder).await?;
+    let mut files = tokio::fs::read_dir(folder).await?;
+    let mut ranges = Vec::new();
+    while let Ok(Some(f)) = files.next_entry().await {
+        match read_file::<T>(f, split).await {
+            Ok(r) => ranges.extend(r),
+            Err(e) => warn!("{e}"),
         }
-    };
-    let parsed = parse_from_string::<&str>(content.as_str(), config.split_string.as_deref());
+    }
+
+    Ok(ranges)
+}
+
+async fn read_file<T: BlockListNet>(f: DirEntry, split: Option<&str>) -> Result<Vec<T>, AppError> {
+    let content = tokio::fs::read_to_string(f.path()).await.map_err(|e| {
+        AppError::FileError(format!(
+            "custom ranges: file {} could not be opened: {e}",
+            f.path().display()
+        ))
+    })?;
+    let parsed = parse_from_string::<&str>(content.as_str(), split);
     let validated = validate_subnets::<T>(
         &parsed,
         Some(format!("custom ranges: file {}", f.path().display()).as_mut_str()),
     );
 
-    ranges.extend(validated);
+    Ok(validated)
+}
+
+pub fn validate_subnets<T: BlockListNet>(ips: &[String], log: Option<&str>) -> Vec<T> {
+    let mut parsed = Vec::new();
+    for ip in ips {
+        match ip.parse::<T>() {
+            Ok(parsed_ip) => {
+                if parsed_ip.is_net() {
+                    parsed.push(parsed_ip);
+                } else {
+                    warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
+                }
+            }
+            Err(e) => {
+                warn!("{}:ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
+            }
+        }
+    }
+
+    parsed
+}
+
+pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> Vec<String> {
+    match split_string {
+        None => data
+            .as_ref()
+            .split_whitespace()
+            .map(|s| s.trim().to_string())
+            .collect(),
+        Some(split_str) => data
+            .as_ref()
+            .split(split_str)
+            .map(|s| s.trim().to_string())
+            .collect(),
+    }
 }
 
 async fn fetch_blocklist(config: &UrlBlocklist, endpoint: &str) -> Result<Vec<String>, AppError> {
@@ -168,44 +238,4 @@ async fn fetch_blocklist(config: &UrlBlocklist, endpoint: &str) -> Result<Vec<St
 
     debug!("blocklist fetched from: {endpoint}");
     Ok(blocklist)
-}
-
-pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> Vec<String> {
-    match split_string {
-        None => data
-            .as_ref()
-            .split_whitespace()
-            .map(|s| s.trim().to_string())
-            .collect(),
-        Some(split_str) => data
-            .as_ref()
-            .split(split_str)
-            .map(|s| s.trim().to_string())
-            .collect(),
-    }
-}
-
-pub fn validate_subnets<T>(ips: &[String], log: Option<&str>) -> Vec<T>
-where
-    T: ListNetwork + FromStr + Display + std::fmt::Debug,
-    <T as FromStr>::Err: Display,
-    AppError: From<<T as FromStr>::Err>,
-{
-    let mut parsed = Vec::new();
-    for ip in ips {
-        match ip.parse::<T>() {
-            Ok(parsed_ip) => {
-                if parsed_ip.is_net() {
-                    parsed.push(parsed_ip);
-                } else {
-                    warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
-                }
-            }
-            Err(e) => {
-                warn!("{}:ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
-            }
-        }
-    }
-
-    parsed
 }
