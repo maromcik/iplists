@@ -33,4 +33,5 @@ pub struct UrlBlocklist {
     pub timeout: std::time::Duration,
     #[serde(default)]
     pub split_string: Option<String>,
+    pub backup_path: String,
 }

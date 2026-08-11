@@ -3,26 +3,34 @@ use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
 use crate::iptools::network::{ListNetwork, Splitable};
 use log::{debug, error, warn};
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
+use std::path::Path;
 use std::str::FromStr;
 use tokio::fs::DirEntry;
 
 pub trait BlockListNet:
-    ListNetwork + FromStr<Err: Display> + Display + Splitable<Output = Self>
+    ListNetwork
+    + FromStr<Err: Display>
+    + Display
+    + Splitable<Output = Self>
+    + Serialize
+    + for<'de> Deserialize<'de>
 {
 }
 
 impl<T> BlockListNet for T where
-    T: ListNetwork + FromStr<Err: Display> + Display + Splitable<Output = T>
+    T: ListNetwork
+        + FromStr<Err: Display>
+        + Display
+        + Splitable<Output = T>
+        + Serialize
+        + for<'de> Deserialize<'de>
 {
 }
 
-#[derive(Debug)]
-pub struct BlocklistRanges<Ipv4, Ipv6>
-where
-    Ipv4: BlockListNet,
-    Ipv6: BlockListNet,
-{
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlocklistRanges<Ipv4, Ipv6> {
     pub ipv4: Vec<Ipv4>,
     pub ipv6: Vec<Ipv6>,
 }
@@ -58,8 +66,24 @@ where
 
         for blocklist in &config.url_blocklist {
             match BlocklistRanges::download(blocklist).await {
-                Ok(ranges) => merged.merge(ranges),
+                Ok(ranges) => {
+                    if let Err(e) = save_blocklist(&ranges, &blocklist.backup_path).await {
+                        warn!("failed to save blocklist to disk: {}", e);
+                    } else {
+                        debug!("saved blocklist to disk: {}", blocklist.backup_path);
+                    }
+                    merged.merge(ranges);
+                }
                 Err(e) => {
+                    match load_blocklist::<Ipv4, Ipv6>(&blocklist.backup_path).await {
+                        Ok(ranges) => {
+                            merged.merge(ranges);
+                            debug!("loaded blocklist from disk: {}", blocklist.backup_path);
+                        }
+                        Err(e) => {
+                            error!("failed to load blocklist from disk: {}", e);
+                        }
+                    }
                     error!("failed to download blocklist from: {}", e);
                 }
             }
@@ -151,6 +175,29 @@ where
         self.ipv4.extend(other.ipv4);
         self.ipv6.extend(other.ipv6);
     }
+}
+
+async fn save_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
+    ranges: &BlocklistRanges<Ipv4, Ipv6>,
+    path: &str,
+) -> Result<(), AppError> {
+    tokio::fs::create_dir_all(
+        Path::new(path)
+            .parent()
+            .ok_or(AppError::FileError(format!("path has no parent: {}", path)))?,
+    )
+    .await?;
+    let json = serde_json::to_string(ranges)?;
+    tokio::fs::write(path, json).await?;
+    Ok(())
+}
+
+async fn load_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
+    path: &str,
+) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
+    let content = tokio::fs::read_to_string(path).await?;
+    let ranges: BlocklistRanges<Ipv4, Ipv6> = serde_json::from_str(&content)?;
+    Ok(ranges)
 }
 
 pub async fn load_custom_lists<T: BlockListNet>(

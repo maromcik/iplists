@@ -51,6 +51,8 @@ pub enum AppError {
     SchedulerError(String),
     #[error("Address manipulation error: {0}")]
     AddressManipulationError(String),
+    #[error("Serde error: {0}")]
+    SerdeError(String),
 }
 
 impl Debug for AppError {
@@ -80,6 +82,12 @@ impl From<std::io::Error> for AppError {
 impl From<ParseIntError> for AppError {
     fn from(_: ParseIntError) -> Self {
         Self::IdentityError("Invalid User ID".to_string())
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(value: serde_json::Error) -> Self {
+        Self::SerdeError(value.to_string())
     }
 }
 
