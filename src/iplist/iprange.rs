@@ -300,7 +300,10 @@ impl IpRanges {
         continent: &str,
     ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
         let Some(ranges) = self.location_ranges.by_continent.get(continent) else {
-            return Ok(Arc::new(IpLocationRangeByIp::default()));
+            return Err(AppError::NotFound(format!(
+                "No location ranges found for continent: {}",
+                continent
+            )));
         };
         Ok(ranges.clone())
     }
@@ -310,14 +313,20 @@ impl IpRanges {
         country_alpha2: &str,
     ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
         let Some(ranges) = self.location_ranges.by_country.get(country_alpha2) else {
-            return Ok(Arc::new(IpLocationRangeByIp::default()));
+            return Err(AppError::NotFound(format!(
+                "No location ranges found for country: {}",
+                country_alpha2
+            )));
         };
         Ok(ranges.clone())
     }
 
     pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp>, AppError> {
         let Some(ranges) = self.asn_ranges.by_asn.get(asn) else {
-            return Ok(Arc::new(IpAsnRangeByIp::default()));
+            return Err(AppError::NotFound(format!(
+                "No ASN ranges found for ASN: {}",
+                asn
+            )));
         };
         Ok(ranges.clone())
     }
