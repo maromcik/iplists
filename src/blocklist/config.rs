@@ -10,7 +10,7 @@ pub struct BlocklistConfig {
     pub url_blocklist: Vec<UrlBlocklist>,
     pub custom_blocklist: CustomListConfig,
     pub custom_allowlist: CustomListConfig,
-    pub interval: String,
+    pub cron: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

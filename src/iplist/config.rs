@@ -30,5 +30,5 @@ pub struct IplistConfig {
     #[serde(default)]
     pub basic_auth: Option<BasicAuth>,
     pub output_folder: String,
-    pub download_cron: String,
+    pub cron: String,
 }

@@ -27,6 +27,7 @@
       if (label === 'Continents') return 'fas fa-globe';
       if (label === 'ASNs') return 'fas fa-network-wired';
       if (label === 'Blocklist') return 'fas fa-ban';
+      if (label === 'Status') return 'fas fa-heart-pulse';
       return '';
   }
 </script>

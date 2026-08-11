@@ -40,3 +40,37 @@ export interface CombinedIpRange {
     isp: string;
     location: Location;
 }
+
+export enum StatusCode {
+    Ok = 0,
+    Warning = 1,
+    Error = 2,
+    Unavailable = 3,
+}
+
+export interface StatusInfo {
+    status_code: StatusCode;
+    status_meaning: string;
+    message: string;
+}
+
+export interface UpdateStatus {
+    status: StatusInfo;
+    last_update: string | null;
+    next_update: string | null;
+}
+
+export interface ComponentStatus {
+    status: StatusInfo;
+    update: UpdateStatus;
+}
+
+
+export interface AppStatus {
+    overall: StatusInfo;
+    db: StatusInfo;
+    locations: ComponentStatus;
+    asns: ComponentStatus;
+    geo: ComponentStatus;
+    blocklist: ComponentStatus;
+}

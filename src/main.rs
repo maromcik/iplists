@@ -3,8 +3,10 @@ use crate::error::AppError;
 use crate::handlers::iplist::{
     geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
+use crate::handlers::status::get_status;
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use crate::iplist::parsers::maxmind::MaxMindParser;
+use crate::status::{AppStatus, ComponentStatus};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -17,6 +19,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use time::OffsetDateTime;
 use tokio::net::lookup_host;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -37,6 +40,7 @@ pub mod handlers;
 pub mod iplist;
 pub mod iptools;
 pub mod models;
+pub mod status;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -53,6 +57,7 @@ struct Cli {
 
 pub struct AppState {
     pub config: AppConfig,
+    pub status: RwLock<AppStatus>,
     pub ip_ranges: RwLock<IpRanges>,
     pub blocklist_ranges: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
 }
@@ -64,6 +69,7 @@ impl AppState {
 
         Ok(Arc::new(Self {
             config,
+            status: RwLock::new(AppStatus::default()),
             ip_ranges: RwLock::new(ip_ranges),
             blocklist_ranges: RwLock::new(blocklist_ranges),
         }))
@@ -113,6 +119,7 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         .route("/iplist/asn", get(get_by_asn))
         .route("/blocklist", get(get_blocklist))
         .route("/iplist/geo", get(geo_location))
+        .route("/status", get(get_status))
         .with_state(state.clone());
 
     let app = Router::new()
@@ -205,32 +212,33 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
     let config_local = config.iplist.clone();
     let state_local = state.clone();
     scheduler
-        .add(Job::new_async(
-            &config.iplist.download_cron,
-            move |_uuid, _lock| {
-                let config_local = config_local.clone();
-                let state_local = state_local.clone();
-                Box::pin(async move {
-                    debug!("scheduler:starting iplist update");
-                    match generate_ranges::<MaxMindParser>(&config_local.clone()).await {
-                        Ok(ranges) => {
-                            *state_local.ip_ranges.write().await = ranges;
-                        }
-                        Err(e) => {
-                            error!("Failed to generate ranges: {}", e);
-                        }
-                    };
-                    info!("scheduler:iplist update completed");
-                })
-            },
-        )?)
+        .add(Job::new_async(&config.iplist.cron, move |_uuid, _lock| {
+            let config_local = config_local.clone();
+            let state_local = state_local.clone();
+            Box::pin(async move {
+                debug!("scheduler:starting iplist update");
+                match generate_ranges::<MaxMindParser>(&config_local.clone()).await {
+                    Ok(ranges) => {
+                        *state_local.ip_ranges.write().await = ranges;
+                        let mut status = state_local.status.write().await;
+                        status.asns = ComponentStatus::ok(OffsetDateTime::now_utc());
+                        status.locations = ComponentStatus::ok(OffsetDateTime::now_utc());
+                        status.geo = ComponentStatus::ok(OffsetDateTime::now_utc());
+                    }
+                    Err(e) => {
+                        error!("Failed to generate ranges: {}", e);
+                    }
+                };
+                info!("scheduler:iplist update completed");
+            })
+        })?)
         .await?;
 
     let config_local = config.blocklist.clone();
     let state_local = state.clone();
     scheduler
         .add(Job::new_async(
-            &config.blocklist.interval,
+            &config.blocklist.cron,
             move |_uuid, _lock| {
                 let config_local = config_local.clone();
                 let state_local = state_local.clone();
@@ -239,6 +247,8 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                     let merged = BlocklistRanges::merged_blocklist_ranges(&config_local).await;
                     *state_local.blocklist_ranges.write().await = merged;
                     info!("scheduler:blocklist update completed");
+                    let mut status = state_local.status.write().await;
+                    status.blocklist = ComponentStatus::ok(OffsetDateTime::now_utc());
                 })
             },
         )?)
