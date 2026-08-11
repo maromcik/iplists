@@ -1,14 +1,16 @@
 use crate::iplist::formatter::{OutputFormat, save_data};
 use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::ListNetwork;
+use crate::status::AppStatus;
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
 use itertools::Itertools;
-use log::{debug, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Location {
@@ -173,19 +175,19 @@ impl IpLocationRanges {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct IPTrieLocationRanges {
     pub ipv4: IPTrie<IpLocationRange>,
     pub ipv6: IPTrie<IpLocationRange>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct IPTrieAsnRanges {
     pub ipv4: IPTrie<IpAsnRange>,
     pub ipv6: IPTrie<IpAsnRange>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct IpRanges {
     pub location_ranges: IpLocationRanges,
     pub asn_ranges: IpAsnRanges,
@@ -332,19 +334,54 @@ impl IpRanges {
     }
 }
 
-pub async fn generate_ranges<P>(config: &IplistConfig) -> Result<IpRanges, AppError>
+pub async fn generate_ranges<P>(config: &IplistConfig, status: &RwLock<AppStatus>) -> IpRanges
 where
     P: LocationParser + AsnParser,
 {
-    let locations = P::locations(config)
-        .await?
-        .into_iter()
-        .filter(|l| !l.code.is_empty())
-        .sorted_by_key(|l| l.code.clone())
-        .collect::<Vec<_>>();
-    let location_ranges = P::location_ranges(config, &locations).await?;
-    let asn_ranges = P::asn_ranges(config).await?;
+    let locations = match P::locations(config).await {
+        Ok(locations) => locations
+            .into_iter()
+            .filter(|l| !l.code.is_empty())
+            .sorted_by_key(|l| l.code.clone())
+            .collect::<Vec<_>>(),
+        Err(e) => {
+            let mut status = status.write().await;
+            let msg = format!("failed to load locations: {e}");
+            error!("{msg}");
+            status.locations.error(&msg);
+            status.geo.warning(&msg);
+            vec![]
+        }
+    };
+    let location_ranges = match P::location_ranges(config, &locations).await {
+        Ok(ranges) => ranges,
+        Err(e) => {
+            let mut status = status.write().await;
+            let msg = format!("failed to load countries: {e}");
+            error!("{msg}");
+            status.locations.error(&msg);
+            status.geo.warning(&msg);
+            vec![]
+        }
+    };
+    let asn_ranges = match P::asn_ranges(config).await {
+        Ok(ranges) => ranges,
+        Err(e) => {
+            let mut status = status.write().await;
+            let msg = format!("failed to load ASNs: {e}");
+            error!("{msg}");
+            status.asns.error(&msg);
+            status.geo.warning(&msg);
+            vec![]
+        }
+    };
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
-    ip_ranges.location_ranges.save(config).await?;
-    Ok(ip_ranges)
+    if let Err(e) = ip_ranges.location_ranges.save(config).await {
+        let mut status = status.write().await;
+        let msg = format!("failed to save locations: {e}");
+        error!("{msg}");
+        status.locations.warning(msg);
+    }
+
+    ip_ranges
 }

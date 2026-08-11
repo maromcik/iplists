@@ -6,7 +6,7 @@ use crate::handlers::iplist::{
 use crate::handlers::status::get_status;
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use crate::iplist::parsers::maxmind::MaxMindParser;
-use crate::status::{AppStatus, ComponentStatus};
+use crate::status::{AppStatus, ComponentStatus, next_run};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -14,12 +14,11 @@ use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use ipnet::{Ipv4Net, Ipv6Net};
-use log::{debug, error, info};
+use log::{debug, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use time::OffsetDateTime;
 use tokio::net::lookup_host;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
@@ -64,12 +63,24 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
-        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist).await?;
-        let blocklist_ranges = BlocklistRanges::merged_blocklist_ranges(&config.blocklist).await;
+        let status = RwLock::new(AppStatus::default());
+        let next_iplist_run = next_run(&config.iplist.cron);
+        let next_blocklist_run = next_run(&config.blocklist.cron);
+        {
+            let mut status = status.write().await;
+            status.locations = ComponentStatus::ok_new(next_iplist_run);
+            status.asns = ComponentStatus::ok_new(next_iplist_run);
+            status.geo = ComponentStatus::ok_new(next_iplist_run);
+            status.blocklist = ComponentStatus::ok_new(next_blocklist_run);
+        }
+
+        let blocklist_ranges =
+            BlocklistRanges::merged_blocklist_ranges(&config.blocklist, &status).await;
+        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist, &status).await;
 
         Ok(Arc::new(Self {
             config,
-            status: RwLock::new(AppStatus::default()),
+            status,
             ip_ranges: RwLock::new(ip_ranges),
             blocklist_ranges: RwLock::new(blocklist_ranges),
         }))
@@ -217,18 +228,14 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
             let state_local = state_local.clone();
             Box::pin(async move {
                 debug!("scheduler:starting iplist update");
-                match generate_ranges::<MaxMindParser>(&config_local.clone()).await {
-                    Ok(ranges) => {
-                        *state_local.ip_ranges.write().await = ranges;
-                        let mut status = state_local.status.write().await;
-                        status.asns = ComponentStatus::ok(OffsetDateTime::now_utc());
-                        status.locations = ComponentStatus::ok(OffsetDateTime::now_utc());
-                        status.geo = ComponentStatus::ok(OffsetDateTime::now_utc());
-                    }
-                    Err(e) => {
-                        error!("Failed to generate ranges: {}", e);
-                    }
-                };
+                let next = next_run(&config_local.cron);
+                let ranges =
+                    generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await;
+                *state_local.ip_ranges.write().await = ranges;
+                let mut status = state_local.status.write().await;
+                status.asns.update.update(next);
+                status.locations.update.update(next);
+                status.geo.update.update(next);
                 info!("scheduler:iplist update completed");
             })
         })?)
@@ -244,11 +251,16 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 let state_local = state_local.clone();
                 Box::pin(async move {
                     debug!("scheduler:starting blocklist update");
-                    let merged = BlocklistRanges::merged_blocklist_ranges(&config_local).await;
+                    let merged = BlocklistRanges::merged_blocklist_ranges(
+                        &config_local,
+                        &state_local.status,
+                    )
+                    .await;
                     *state_local.blocklist_ranges.write().await = merged;
-                    info!("scheduler:blocklist update completed");
+                    let next = next_run(&config_local.cron);
                     let mut status = state_local.status.write().await;
-                    status.blocklist = ComponentStatus::ok(OffsetDateTime::now_utc());
+                    status.blocklist.update.update(next);
+                    info!("scheduler:blocklist update completed");
                 })
             },
         )?)

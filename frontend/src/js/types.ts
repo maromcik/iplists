@@ -45,7 +45,7 @@ export enum StatusCode {
     Ok = 0,
     Warning = 1,
     Error = 2,
-    Unavailable = 3,
+    Disaster = 3,
 }
 
 export interface StatusInfo {
@@ -55,7 +55,6 @@ export interface StatusInfo {
 }
 
 export interface UpdateStatus {
-    status: StatusInfo;
     last_update: string | null;
     next_update: string | null;
 }
@@ -68,7 +67,6 @@ export interface ComponentStatus {
 
 export interface AppStatus {
     overall: StatusInfo;
-    db: StatusInfo;
     locations: ComponentStatus;
     asns: ComponentStatus;
     geo: ComponentStatus;

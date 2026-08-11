@@ -1,57 +1,117 @@
-use serde::{Deserialize, Serialize};
+//! Application health reporting, served by `/api/status`.
+//!
+//! Each component (locations, asns, geo, blocklist) carries a
+//! [`ComponentStatus`]: the current health of the component itself plus an
+//! [`UpdateStatus`] tracking when it was last refreshed and when the next
+//! scheduled refresh is due. Codes are understood by the status frontend:
+//! 0 ok, 1 warning (a subpart failed), 2 error (whole component failed),
+//! 3 unavailable.
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::OffsetDateTime;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct AppStatus {
-    pub overall: Status,
-    pub db: Status,
-    pub locations: ComponentStatus,
-    pub asns: ComponentStatus,
-    pub geo: ComponentStatus,
-    pub blocklist: ComponentStatus,
+/// Severity of a single fallible operation or component, ordered such that
+/// `max()` over a set of codes yields the most severe one.
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StatusCode {
+    #[default]
+    Ok = 0,
+    Warning = 1,
+    Error = 2,
+    Disaster = 3,
+}
+
+impl StatusCode {
+    pub fn meaning(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Warning => "warning",
+            Self::Error => "error",
+            Self::Disaster => "disaster",
+        }
+    }
+}
+
+impl Serialize for StatusCode {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_i32(*self as i32)
+    }
+}
+
+impl<'de> Deserialize<'de> for StatusCode {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        match i32::deserialize(deserializer)? {
+            0 => Ok(Self::Ok),
+            1 => Ok(Self::Warning),
+            2 => Ok(Self::Error),
+            3 => Ok(Self::Disaster),
+            other => Err(serde::de::Error::custom(format!(
+                "unknown status code: {other}"
+            ))),
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Status {
-    pub status_code: i32,
+    pub status_code: StatusCode,
     pub status_meaning: String,
     pub message: String,
 }
 
 impl Status {
-    pub fn ok() -> Self {
+    pub fn new(status_code: StatusCode, message: impl Into<String>) -> Self {
         Self {
-            status_code: 0,
-            status_meaning: "ok".to_string(),
-            message: "updated".to_string(),
+            status_code,
+            status_meaning: status_code.meaning().to_string(),
+            message: message.into(),
         }
+    }
+
+    pub fn ok(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::Ok, message)
+    }
+
+    pub fn warning(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::Warning, message)
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::Error, message)
+    }
+
+    pub fn never_updated() -> Self {
+        Self {
+            status_code: StatusCode::Warning,
+            status_meaning: "never updated".to_string(),
+            message: "list has never been updated".to_string(),
+        }
+    }
+
+    pub fn disaster(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::Disaster, message)
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateStatus {
-    pub status: Status,
-    pub last_update: String,
-    pub next_update: String,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub last_update: Option<OffsetDateTime>,
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub next_update: Option<OffsetDateTime>,
 }
 
 impl UpdateStatus {
-    pub fn ok(next_update: OffsetDateTime) -> Self {
+    pub fn update_new(next_update: Option<OffsetDateTime>) -> Self {
         Self {
-            status: Status::ok(),
-            last_update: OffsetDateTime::now_utc().to_string(),
-            next_update: next_update.to_string(),
+            last_update: Some(OffsetDateTime::now_utc()),
+            next_update,
         }
     }
-}
 
-impl Default for UpdateStatus {
-    fn default() -> Self {
-        Self {
-            status: Status::ok(),
-            last_update: OffsetDateTime::now_utc().to_string(),
-            next_update: OffsetDateTime::now_utc().to_string(),
-        }
+    pub fn update(&mut self, next_update: Option<OffsetDateTime>) {
+        self.last_update = Some(OffsetDateTime::now_utc());
+        self.next_update = next_update;
     }
 }
 
@@ -62,10 +122,76 @@ pub struct ComponentStatus {
 }
 
 impl ComponentStatus {
-    pub fn ok(next_update: OffsetDateTime) -> Self {
+    /// Component is healthy and has just been refreshed.
+    pub fn ok_new(next_update: Option<OffsetDateTime>) -> Self {
         Self {
-            status: Status::ok(),
-            update: UpdateStatus::ok(next_update),
+            status: Status::ok("component is up-to-date"),
+            update: UpdateStatus::update_new(next_update),
         }
     }
+
+    pub fn ok(&mut self, message: impl Into<String>) {
+        self.status = Status::ok(message);
+    }
+    pub fn warning(&mut self, message: impl Into<String>) {
+        self.status = Status::warning(message);
+    }
+
+    pub fn error(&mut self, message: impl Into<String>) {
+        self.status = Status::error(message);
+    }
+
+    pub fn disaster(&mut self, message: impl Into<String>) {
+        self.status = Status::disaster(message);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppStatus {
+    pub overall: Status,
+    pub locations: ComponentStatus,
+    pub asns: ComponentStatus,
+    pub geo: ComponentStatus,
+    pub blocklist: ComponentStatus,
+}
+
+impl AppStatus {
+    /// The most severe status across db and all components.
+    pub fn worst(&self) -> Status {
+        [
+            &self.locations.status,
+            &self.asns.status,
+            &self.geo.status,
+            &self.blocklist.status,
+        ]
+        .into_iter()
+        .max_by_key(|s| s.status_code)
+        .cloned()
+        .unwrap_or_default()
+    }
+}
+
+impl Default for AppStatus {
+    fn default() -> Self {
+        Self {
+            overall: Status::never_updated(),
+            locations: ComponentStatus::default(),
+            asns: ComponentStatus::default(),
+            geo: ComponentStatus::default(),
+            blocklist: ComponentStatus::default(),
+        }
+    }
+}
+
+pub fn next_run(cron: &str) -> Option<OffsetDateTime> {
+    let schedule = croner::parser::CronParser::builder()
+        .seconds(croner::parser::Seconds::Required)
+        .dom_and_dow(true)
+        .build()
+        .parse(cron)
+        .ok()?;
+    let next = schedule
+        .find_next_occurrence(&chrono::Utc::now(), false)
+        .ok()?;
+    OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
 }

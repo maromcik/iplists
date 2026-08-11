@@ -2,12 +2,14 @@ use crate::blocklist::config::{BlocklistConfig, CustomListConfig, UrlBlocklist};
 use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
 use crate::iptools::network::{ListNetwork, Splitable};
+use crate::status::AppStatus;
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::path::Path;
 use std::str::FromStr;
 use tokio::fs::DirEntry;
+use tokio::sync::RwLock;
 
 pub trait BlockListNet:
     ListNetwork
@@ -60,15 +62,19 @@ where
         }
     }
 
-    pub async fn merged_blocklist_ranges(config: &BlocklistConfig) -> BlocklistRanges<Ipv4, Ipv6> {
+    pub async fn merged_blocklist_ranges(
+        config: &BlocklistConfig,
+        status: &RwLock<AppStatus>,
+    ) -> BlocklistRanges<Ipv4, Ipv6> {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
-
         for blocklist in &config.url_blocklist {
             match BlocklistRanges::download(blocklist).await {
                 Ok(ranges) => {
                     if let Err(e) = save_blocklist(&ranges, &blocklist.backup_path).await {
-                        warn!("failed to save blocklist to disk: {}", e);
+                        let msg = format!("failed to save blocklist to disk: {}", e);
+                        warn!("{msg}");
+                        status.write().await.blocklist.warning(msg);
                     } else {
                         debug!("saved blocklist to disk: {}", blocklist.backup_path);
                     }
@@ -81,10 +87,14 @@ where
                             debug!("loaded blocklist from disk: {}", blocklist.backup_path);
                         }
                         Err(e) => {
-                            error!("failed to load blocklist from disk: {}", e);
+                            let msg = format!("failed to load blocklist from disk: {}", e);
+                            warn!("{msg}");
+                            status.write().await.blocklist.warning(msg);
                         }
                     }
-                    error!("failed to download blocklist from: {}", e);
+                    let msg = format!("failed to download blocklist from: {}", e);
+                    error!("{msg}");
+                    status.write().await.blocklist.error(msg);
                 }
             }
         }
@@ -93,7 +103,9 @@ where
         match BlocklistRanges::load(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
-                error!("failed to load custom blocklist ranges: {}", e);
+                let msg = format!("failed to load custom blocklist ranges: {}", e);
+                error!("{msg}");
+                status.write().await.blocklist.warning(msg);
             }
         };
 
@@ -101,8 +113,10 @@ where
         let allowlist = match BlocklistRanges::load(&config.custom_allowlist).await {
             Ok(ranges) => ranges,
             Err(e) => {
-                error!("failed to load custom allowlist ranges: {}", e);
+                let msg = format!("failed to load custom allowlist ranges: {}", e);
+                error!("{msg}");
                 warn!("returning blocklist without allowlist");
+                status.write().await.blocklist.warning(msg);
                 return merged.deduplicate();
             }
         };
@@ -154,21 +168,10 @@ where
     }
 
     pub async fn load(config: &CustomListConfig) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
-        let mut ipv4_ranges = Vec::new();
-        let mut ipv6_ranges = Vec::new();
-        match load_custom_lists(&config.ipv4_folder, config.split_string.as_deref()).await {
-            Ok(r) => ipv4_ranges.extend(r),
-            Err(e) => warn!("could not load the IPv4 list: {e}"),
-        }
-        match load_custom_lists(&config.ipv6_folder, config.split_string.as_deref()).await {
-            Ok(r) => ipv6_ranges.extend(r),
-            Err(e) => warn!("could not load the IPv6 list: {e}"),
-        }
+        let ipv4 = load_custom_lists(&config.ipv4_folder, config.split_string.as_deref()).await?;
+        let ipv6 = load_custom_lists(&config.ipv6_folder, config.split_string.as_deref()).await?;
 
-        Ok(BlocklistRanges {
-            ipv4: ipv4_ranges,
-            ipv6: ipv6_ranges,
-        })
+        Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
     pub fn merge(&mut self, other: BlocklistRanges<Ipv4, Ipv6>) {

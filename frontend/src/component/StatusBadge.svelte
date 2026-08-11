@@ -8,7 +8,7 @@
         [StatusCode.Ok]: "bg-green-600 text-white",
         [StatusCode.Warning]: "bg-yellow-400 text-gray-900",
         [StatusCode.Error]: "bg-amber-500 text-gray-900",
-        [StatusCode.Unavailable]: "bg-red-600 text-white",
+        [StatusCode.Disaster]: "bg-red-600 text-white",
     };
 </script>
 

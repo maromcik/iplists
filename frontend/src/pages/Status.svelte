@@ -19,8 +19,8 @@
     const BANNER_COLORS: Record<StatusCode, string> = {
         [StatusCode.Ok]: "border-green-500 bg-green-50 dark:bg-green-900/20",
         [StatusCode.Warning]: "border-yellow-400 bg-yellow-50 dark:bg-yellow-900/20",
-        [StatusCode.Error]: "border-amber-500 bg-amber-50 dark:bg-amber-900/20",
-        [StatusCode.Unavailable]: "border-red-600 bg-red-50 dark:bg-red-900/20",
+        [StatusCode.Error]: "border-red-500 bg-red-50 dark:bg-red-900/20",
+        [StatusCode.Disaster]: "border-red-600 bg-red-50 dark:bg-red-900/20",
     };
 
     let components: { title: string; value: ComponentStatus }[] = [];
@@ -94,19 +94,6 @@
             </div>
         </div>
 
-        <div
-            class="border-l-4 {BANNER_COLORS[status.db.status_code]} rounded-xl shadow-sm p-5 mb-6 flex items-center gap-4"
-        >
-            <StatusBadge status={status.db} />
-            <div class="min-w-0">
-                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    Database
-                </h4>
-                <p class="text-sm text-gray-700 dark:text-gray-300 break-words">
-                    {status.db.message}
-                </p>
-            </div>
-        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {#each components as component (component.title)}
@@ -133,12 +120,7 @@
                         >
                             Update
                         </p>
-                        <StatusBadge status={component.value.update.status} />
-                        <p
-                            class="text-sm mt-2 text-gray-700 dark:text-gray-300 break-words"
-                        >
-                            {component.value.update.status.message}
-                        </p>
+
                         <dl
                             class="mt-2 text-sm text-gray-600 dark:text-gray-400 space-y-1"
                         >

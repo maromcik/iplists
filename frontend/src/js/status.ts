@@ -10,7 +10,7 @@ const VALID_CODES: number[] = [
     StatusCode.Ok,
     StatusCode.Warning,
     StatusCode.Error,
-    StatusCode.Unavailable,
+    StatusCode.Disaster,
 ];
 
 function bad(path: string, expected: string, value: unknown): Error {
@@ -60,7 +60,6 @@ function parseStatusInfo(value: unknown, path: string): StatusInfo {
 function parseUpdateStatus(value: unknown, path: string): UpdateStatus {
     const record = expectRecord(value, path);
     return {
-        status: parseStatusInfo(record.status, path + ".status"),
         last_update: expectNullableString(record.last_update, path + ".last_update"),
         next_update: expectNullableString(record.next_update, path + ".next_update"),
     };
@@ -78,7 +77,6 @@ export function parseAppStatus(data: unknown): AppStatus {
     const record = expectRecord(data, "$");
     return {
         overall: parseStatusInfo(record.overall, "$.overall"),
-        db: parseStatusInfo(record.db, "$.db"),
         locations: parseComponentStatus(record.locations, "$.locations"),
         asns: parseComponentStatus(record.asns, "$.asns"),
         geo: parseComponentStatus(record.geo, "$.geo"),
