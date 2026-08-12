@@ -100,7 +100,7 @@ where
         }
 
         debug!("loading custom blocklist ranges");
-        match BlocklistRanges::load(&config.custom_blocklist, status).await {
+        match BlocklistRanges::load(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
                 let msg = format!("failed to load custom blocklist ranges: {}", e);
@@ -110,7 +110,7 @@ where
         };
 
         debug!("loading custom allowlist ranges");
-        let allowlist = match BlocklistRanges::load(&config.custom_allowlist, status).await {
+        let allowlist = match BlocklistRanges::load(&config.custom_allowlist).await {
             Ok(ranges) => ranges,
             Err(e) => {
                 let msg = format!("failed to load custom allowlist ranges: {}", e);
@@ -167,14 +167,9 @@ where
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
-    pub async fn load(
-        config: &CustomListConfig,
-        status: &RwLock<AppStatus>,
-    ) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
-        let ipv4 =
-            load_custom_lists(&config.ipv4_folder, config.split_string.as_deref(), status).await?;
-        let ipv6 =
-            load_custom_lists(&config.ipv6_folder, config.split_string.as_deref(), status).await?;
+    pub async fn load(config: &CustomListConfig) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
+        let ipv4 = load_custom_lists(&config.ipv4_folder, config.split_string.as_deref()).await?;
+        let ipv6 = load_custom_lists(&config.ipv6_folder, config.split_string.as_deref()).await?;
 
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
@@ -211,7 +206,6 @@ async fn load_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
 pub async fn load_custom_lists<T: BlockListNet>(
     folder: &str,
     split: Option<&str>,
-    status: &RwLock<AppStatus>,
 ) -> Result<Vec<T>, AppError> {
     tokio::fs::create_dir_all(folder).await?;
     let mut files = tokio::fs::read_dir(folder).await?;
@@ -224,7 +218,6 @@ pub async fn load_custom_lists<T: BlockListNet>(
             Err(e) => {
                 let msg = format!("could not load file {path}: {e}");
                 warn!("{msg}");
-                status.write().await.blocklist.warning(msg);
             }
         }
     }
