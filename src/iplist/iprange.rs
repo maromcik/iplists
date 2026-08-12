@@ -39,7 +39,9 @@ pub trait AsnParser {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRange {
     pub network: IpNet,
-    pub location: Location,
+    // Shared with the ~250-entry locations table: ranges only bump a
+    // refcount instead of cloning 4 Strings (×3 stores per range).
+    pub location: Arc<Location>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
@@ -51,8 +53,9 @@ pub struct IpAsnRange {
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpAsnRangeByIp {
-    pub ipv4: Vec<IpAsnRange>,
-    pub ipv6: Vec<IpAsnRange>,
+    // Arc-shared with the ASN lookup tries: one allocation per range.
+    pub ipv4: Vec<Arc<IpAsnRange>>,
+    pub ipv6: Vec<Arc<IpAsnRange>>,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -62,8 +65,9 @@ pub struct IpAsnRanges {
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct IpLocationRangeByIp {
-    pub ipv4: Vec<IpLocationRange>,
-    pub ipv6: Vec<IpLocationRange>,
+    // Arc-shared with the location lookup tries: one allocation per range.
+    pub ipv4: Vec<Arc<IpLocationRange>>,
+    pub ipv6: Vec<Arc<IpLocationRange>>,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -177,14 +181,14 @@ impl IpLocationRanges {
 
 #[derive(Debug, Clone, Default)]
 pub struct IPTrieLocationRanges {
-    pub ipv4: IPTrie<IpLocationRange>,
-    pub ipv6: IPTrie<IpLocationRange>,
+    pub ipv4: IPTrie<Arc<IpLocationRange>>,
+    pub ipv6: IPTrie<Arc<IpLocationRange>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct IPTrieAsnRanges {
-    pub ipv4: IPTrie<IpAsnRange>,
-    pub ipv6: IPTrie<IpAsnRange>,
+    pub ipv4: IPTrie<Arc<IpAsnRange>>,
+    pub ipv6: IPTrie<Arc<IpAsnRange>>,
 }
 
 #[derive(Clone, Default)]
@@ -211,13 +215,14 @@ impl IpRanges {
         asn_ranges.sort_by_key(ListNetwork::network_prefix);
 
         for range in location_ranges {
+            let range = Arc::new(range);
             if range.network.is_ipv4() {
                 if ipv4_trie_location.insert(&range) {
                     location_ranges_by_country
                         .entry(range.location.code.clone())
                         .or_default()
                         .ipv4
-                        .push(range.clone());
+                        .push(Arc::clone(&range));
                     location_ranges_by_continent
                         .entry(range.location.continent.clone())
                         .or_default()
@@ -230,7 +235,7 @@ impl IpRanges {
                         .entry(range.location.code.clone())
                         .or_default()
                         .ipv6
-                        .push(range.clone());
+                        .push(Arc::clone(&range));
                     location_ranges_by_continent
                         .entry(range.location.continent.clone())
                         .or_default()
@@ -243,22 +248,23 @@ impl IpRanges {
         let mut ipv4_trie_asn = IPTrie::new();
         let mut ipv6_trie_asn = IPTrie::new();
         let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
-        for range in &asn_ranges {
+        for range in asn_ranges {
+            let range = Arc::new(range);
             if range.network.is_ipv4() {
-                if ipv4_trie_asn.insert(range) {
+                if ipv4_trie_asn.insert(&range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
                         .ipv4
-                        .push(range.clone());
+                        .push(range);
                 }
             } else {
-                if ipv6_trie_asn.insert(range) {
+                if ipv6_trie_asn.insert(&range) {
                     asn_ranges_by_asn
                         .entry(range.asn)
                         .or_default()
                         .ipv6
-                        .push(range.clone());
+                        .push(range);
                 }
             }
         }
