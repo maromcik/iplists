@@ -101,11 +101,6 @@
                     <h4 class="text-xl font-bold mb-3">{component.title}</h4>
 
                     <div class="mb-4">
-                        <p
-                            class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
-                        >
-                            Component
-                        </p>
                         <StatusBadge status={component.value.status} />
                         <p
                             class="text-sm mt-2 text-gray-700 dark:text-gray-300 break-words"
