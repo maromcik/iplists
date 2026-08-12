@@ -6,7 +6,7 @@ use crate::handlers::iplist::{
 use crate::handlers::status::get_status;
 use crate::iplist::iprange::{IpRanges, generate_ranges};
 use crate::iplist::parsers::maxmind::MaxMindParser;
-use crate::status::{AppStatus, ComponentStatus, next_run};
+use crate::status::{AppStatus, ComponentStatus, Schedule};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -59,13 +59,15 @@ pub struct AppState {
     pub status: RwLock<AppStatus>,
     pub ip_ranges: RwLock<IpRanges>,
     pub blocklist_ranges: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
+    pub schedules: Schedule,
 }
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
+        let schedules = Schedule::new(&config.iplist.cron, &config.blocklist.cron)?;
         let status = RwLock::new(AppStatus::default());
-        let next_iplist_run = next_run(&config.iplist.cron);
-        let next_blocklist_run = next_run(&config.blocklist.cron);
+        let next_iplist_run = schedules.get_next_run_iplist();
+        let next_blocklist_run = schedules.get_next_run_blocklist();
         {
             let mut status = status.write().await;
             status.locations = ComponentStatus::ok_new(next_iplist_run);
@@ -77,12 +79,12 @@ impl AppState {
         let blocklist_ranges =
             BlocklistRanges::merged_blocklist_ranges(&config.blocklist, &status).await;
         let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist, &status).await;
-
         Ok(Arc::new(Self {
             config,
             status,
             ip_ranges: RwLock::new(ip_ranges),
             blocklist_ranges: RwLock::new(blocklist_ranges),
+            schedules,
         }))
     }
 }
@@ -230,7 +232,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                 debug!("scheduler:starting iplist update");
                 let ranges =
                     generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await;
-                let next = next_run(&config_local.cron);
+                let next = state_local.schedules.get_next_run_iplist();
                 *state_local.ip_ranges.write().await = ranges;
                 let mut status = state_local.status.write().await;
                 status.asns.update.update(next);
@@ -257,7 +259,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                     )
                     .await;
                     *state_local.blocklist_ranges.write().await = merged;
-                    let next = next_run(&config_local.cron);
+                    let next = state_local.schedules.get_next_run_blocklist();
                     let mut status = state_local.status.write().await;
                     status.blocklist.update.update(next);
                     info!("scheduler:blocklist update completed");

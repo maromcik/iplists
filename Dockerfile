@@ -1,5 +1,7 @@
-# ---------- Rust ----------
-FROM rust:1.96-slim AS builder
+# ---------- Rust base ----------
+# Shared base: toolchain, system deps and cargo-chef (installed once, cached
+# for all stages derived from here).
+FROM rust:1.96-slim AS base
 
 RUN apt-get update && apt-get install -y \
     cmake \
@@ -8,8 +10,32 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cargo install cargo-chef --version 0.1.73
+
 WORKDIR /usr/src/app
 
+
+# ---------- Rust: plan ----------
+# Compute the dependency recipe from the manifests. This layer only
+# invalidates when Cargo.toml/Cargo.lock change.
+FROM base AS planner
+
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./src ./src
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+
+# ---------- Rust: build ----------
+FROM base AS builder
+
+# Cook the dependencies first: cached as long as the recipe is unchanged.
+COPY --from=planner /usr/src/app/recipe.json recipe.json
+
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Only now copy the actual sources; rebuilding them reuses the cooked deps.
 COPY ./src ./src
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
@@ -43,9 +69,8 @@ FROM debian:trixie-slim AS runtime
 
 RUN apt-get update && apt-get install -y \
     zip \
-    pkg-config \
-    libssl-dev \
-    clang \
+    ca-certificates \
+    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app

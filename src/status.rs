@@ -1,17 +1,9 @@
-//! Application health reporting, served by `/api/status`.
-//!
-//! Each component (locations, asns, geo, blocklist) carries a
-//! [`ComponentStatus`]: the current health of the component itself plus an
-//! [`UpdateStatus`] tracking when it was last refreshed and when the next
-//! scheduled refresh is due. Codes are understood by the status frontend:
-//! 0 ok, 1 warning (a subpart failed), 2 error (whole component failed),
-//! 3 unavailable.
-
+use croner::Cron;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::OffsetDateTime;
 
-/// Severity of a single fallible operation or component, ordered such that
-/// `max()` over a set of codes yields the most severe one.
+use crate::error::AppError;
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StatusCode {
     #[default]
@@ -183,15 +175,42 @@ impl Default for AppStatus {
     }
 }
 
-pub fn next_run(cron: &str) -> Option<OffsetDateTime> {
-    let schedule = croner::parser::CronParser::builder()
-        .seconds(croner::parser::Seconds::Required)
-        .dom_and_dow(true)
-        .build()
-        .parse(cron)
-        .ok()?;
-    let next = schedule
-        .find_next_occurrence(&chrono::Utc::now(), false)
-        .ok()?;
-    OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
+pub struct Schedule {
+    pub blocklist_cron: Cron,
+    pub iplist_cron: Cron,
+}
+
+impl Schedule {
+    pub fn new(blocklist_cron: &str, iplist_cron: &str) -> Result<Self, AppError> {
+        Ok(Self {
+            blocklist_cron: Self::build(blocklist_cron)?,
+            iplist_cron: Self::build(iplist_cron)?,
+        })
+    }
+
+    pub fn build(cron: &str) -> Result<Cron, AppError> {
+        let schedule = croner::parser::CronParser::builder()
+            .seconds(croner::parser::Seconds::Required)
+            .dom_and_dow(true)
+            .build()
+            .parse(cron)
+            .map_err(|e| AppError::ParseError(e.to_string()))?;
+        Ok(schedule)
+    }
+
+    pub fn get_next_run_blocklist(&self) -> Option<OffsetDateTime> {
+        let next = self
+            .blocklist_cron
+            .find_next_occurrence(&chrono::Utc::now(), false)
+            .ok()?;
+        OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
+    }
+
+    pub fn get_next_run_iplist(&self) -> Option<OffsetDateTime> {
+        let next = self
+            .iplist_cron
+            .find_next_occurrence(&chrono::Utc::now(), false)
+            .ok()?;
+        OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
+    }
 }

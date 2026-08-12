@@ -1,0 +1,10 @@
+target/
+frontend/node_modules/
+frontend/dist/
+.git/
+.gitlab-ci.yml
+lists/
+static/css/output.css
+iplists.yaml
+Dockerfile
+.dockerignore
