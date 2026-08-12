@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::time::Instant;
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Location {
@@ -78,6 +79,7 @@ pub struct IpLocationRanges {
 
 impl IpLocationRanges {
     pub async fn save(&self, config: &IplistConfig) -> Result<(), AppError> {
+        let t = Instant::now();
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
         for (country, ranges) in &self.by_country {
             let path = format!("{}/gen/{}", config.output_folder, country);
@@ -175,6 +177,10 @@ impl IpLocationRanges {
             .await?;
         }
         debug!("continent files saved");
+        info!(
+            "saved country and continent files in {}ms",
+            t.elapsed().as_millis()
+        );
         Ok(())
     }
 }
@@ -206,6 +212,8 @@ impl IpRanges {
         mut asn_ranges: Vec<IpAsnRange>,
         locations: Vec<Location>,
     ) -> Self {
+        let t = Instant::now();
+
         let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
         let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
         let mut ipv4_trie_location = IPTrie::new();
@@ -268,37 +276,47 @@ impl IpRanges {
                 }
             }
         }
+
+        let location_ranges_count = location_ranges_by_country.len();
+        let asn_ranges_count = asn_ranges_by_asn.len();
+
+        let location_ranges = IpLocationRanges {
+            by_country: location_ranges_by_country
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+            by_continent: location_ranges_by_continent
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+        };
+        let asn_ranges = IpAsnRanges {
+            by_asn: asn_ranges_by_asn
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+        };
+        let trie_location_ranges = IPTrieLocationRanges {
+            ipv4: ipv4_trie_location,
+            ipv6: ipv6_trie_location,
+        };
+        let trie_asn_ranges = IPTrieAsnRanges {
+            ipv4: ipv4_trie_asn,
+            ipv6: ipv6_trie_asn,
+        };
+
         info!(
-            "loaded {} unique location ranges and {} unique ASN ranges",
-            location_ranges_by_country.len(),
-            asn_ranges_by_asn.len()
+            "loaded {} unique location ranges and {} unique ASN ranges in {}ms",
+            location_ranges_count,
+            asn_ranges_count,
+            t.elapsed().as_millis()
         );
 
         Self {
-            location_ranges: IpLocationRanges {
-                by_country: location_ranges_by_country
-                    .into_iter()
-                    .map(|(k, v)| (k, Arc::new(v)))
-                    .collect(),
-                by_continent: location_ranges_by_continent
-                    .into_iter()
-                    .map(|(k, v)| (k, Arc::new(v)))
-                    .collect(),
-            },
-            asn_ranges: IpAsnRanges {
-                by_asn: asn_ranges_by_asn
-                    .into_iter()
-                    .map(|(k, v)| (k, Arc::new(v)))
-                    .collect(),
-            },
-            trie_location_ranges: IPTrieLocationRanges {
-                ipv4: ipv4_trie_location,
-                ipv6: ipv6_trie_location,
-            },
-            trie_asn_ranges: IPTrieAsnRanges {
-                ipv4: ipv4_trie_asn,
-                ipv6: ipv6_trie_asn,
-            },
+            location_ranges,
+            asn_ranges,
+            trie_location_ranges,
+            trie_asn_ranges,
             locations: Arc::new(locations),
         }
     }
