@@ -40,7 +40,7 @@ pub async fn get_all_continents(
 fn get_ips_by_version(
     ips: Arc<IpLocationRangeByIp>,
     form: &IpListFormByCountry,
-) -> Vec<IpLocationRange> {
+) -> Vec<Arc<IpLocationRange>> {
     match form.version {
         Some(IpVersion::Ipv4) => ips.ipv4.clone(),
         Some(IpVersion::Ipv6) => ips.ipv6.clone(),
@@ -151,14 +151,14 @@ pub async fn geo_location(
             location.network,
             0,
             "".to_string(),
-            location.location.clone(),
+            location.location.as_ref().clone(),
         ),
         (Some(location), Some(asn)) => CombinedIpRange::new(
             form.ip,
             location.network,
             asn.asn,
             asn.isp.clone(),
-            location.location.clone(),
+            location.location.as_ref().clone(),
         ),
         (None, Some(asn)) => CombinedIpRange::new(
             form.ip,

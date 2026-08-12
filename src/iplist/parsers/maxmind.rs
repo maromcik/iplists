@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Cursor;
+use std::sync::Arc;
 use std::time::Instant;
 
 use ipnet::IpNet;
@@ -175,14 +176,16 @@ impl LocationParser for MaxMindParser {
         info!("parsing {} Location IP ranges", rows.len());
         let t = Instant::now();
 
-        let location_map: HashMap<&str, &Location> =
-            locations.iter().map(|l| (l.id.as_str(), l)).collect();
+        let location_map: HashMap<&str, Arc<Location>> = locations
+            .iter()
+            .map(|l| (l.id.as_str(), Arc::new(l.clone())))
+            .collect();
         let mut parsed_ranges = Vec::new();
         for row in rows {
             if let Some(location) = location_map.get(row.id.as_str()) {
                 parsed_ranges.push(IpLocationRange {
                     network: row.network,
-                    location: (*location).clone(),
+                    location: Arc::clone(location),
                 });
             }
         }

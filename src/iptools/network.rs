@@ -3,6 +3,7 @@ use std::{
     fmt::{Debug, Display},
     net::IpAddr,
     str::FromStr,
+    sync::Arc,
 };
 
 use crate::{
@@ -327,6 +328,48 @@ impl Splitable for IpLocationRange {
                 location: self.location.clone(),
             },
         ))
+    }
+}
+
+impl<T: ListNetwork> ListNetwork for Arc<T> {
+    fn address(&self) -> IpAddr {
+        (**self).address()
+    }
+
+    fn network_prefix(&self) -> u8 {
+        (**self).network_prefix()
+    }
+
+    fn trie_key(&self) -> TrieKey {
+        (**self).trie_key()
+    }
+
+    fn network_string(&self) -> String {
+        (**self).network_string()
+    }
+
+    fn is_net(&self) -> bool {
+        (**self).is_net()
+    }
+
+    fn is_ipv4(&self) -> bool {
+        (**self).is_ipv4()
+    }
+
+    fn is_ipv6(&self) -> bool {
+        (**self).is_ipv6()
+    }
+}
+
+impl<T> Splitable for Arc<T>
+where
+    T: Splitable<Output = T> + ListNetwork,
+{
+    type Output = Arc<T>;
+
+    fn split(&self) -> Result<(Self::Output, Self::Output), AppError> {
+        let (a, b) = (**self).split()?;
+        Ok((Arc::new(a), Arc::new(b)))
     }
 }
 
