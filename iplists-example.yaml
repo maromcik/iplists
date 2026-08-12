@@ -1,29 +1,36 @@
-app_log_level: debug
+app_log_level: info
 all_log_level: info
-# tokio worker threads; defaults to the number of CPU threads
-#workers: 8
+# num of CPUs by default
+# workers: 16
 #tls_cert_path: <path>/fullchain.pem
 #tls_key_path: <path>/privkey.pem
-#hostnames:
-#   - "localhost:443"
+hostnames:
+  - "[::]:8000"
+# Optional file-based token authentication.
+# Each line: username:token  (empty lines and lines starting with # are ignored)
+# auth_token_file_path: users.txt
 iplist:
-   # country_uri: https://download.db-ip.com/free/dbip-country-lite-{year}-{month}.csv.gz
-   # asn_uri: https://download.db-ip.com/free/dbip-asn-lite-{year}-{month}.csv.gz
    country_uri: https://download.maxmind.com/geoip/databases/GeoLite2-Country-CSV/download?suffix=zip
    asn_uri: https://download.maxmind.com/geoip/databases/GeoLite2-ASN-CSV/download?suffix=zip
    output_folder: lists
-   download_cron: "0 0 * * * *"
-   max_age: 24h
+   cron: "0 0 * * * *"
+   max_age: 12h
    timeout: 10s
    # basic_auth:
-      # username: ""
-      # password: ""
+      # username:
+      # password:
 blocklist:
-   ipv4_url: https://blocklist
-   ipv6_url: https://blocklist
-   ipv4_folder: lists/ipv4
-   ipv6_folder: lists/ipv6
-   headers:
-      Authorization: "Token xxxx"
-   timeout: 10s
-   download_cron: "0/10 * * * * *"
+  cron: "* * * * * *"
+  custom_blocklist:
+    ipv4_folder: lists/custom/blocklist/ipv4
+    ipv6_folder: lists/custom/blocklist/ipv6
+  custom_allowlist:
+    ipv4_folder: lists/custom/allowlist/ipv4
+    ipv6_folder: lists/custom/allowlist/ipv6
+  url_blocklist:
+    - ipv4_url: ""
+      ipv6_url: ""
+      backup_path: lists/backup/blocklist.json
+      timeout: 10s
+    #   headers:
+    #     Authorization: ""
