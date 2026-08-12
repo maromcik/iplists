@@ -334,47 +334,67 @@ impl IpRanges {
     }
 }
 
+pub async fn load_locations<P>(
+    config: &IplistConfig,
+) -> Result<(Vec<Location>, Vec<IpLocationRange>), AppError>
+where
+    P: LocationParser + AsnParser,
+{
+    let locations = P::locations(config)
+        .await
+        .map_err(|e| AppError::ListLoadError(format!("failed to load locations: {e}")))?
+        .into_iter()
+        .filter(|l| !l.code.is_empty())
+        .sorted_by_key(|l| l.code.clone())
+        .collect::<Vec<_>>();
+    let location_ranges = P::location_ranges(config, &locations)
+        .await
+        .map_err(|e| AppError::ListLoadError(format!("failed to load countries: {e}")))?;
+    Ok((locations, location_ranges))
+}
 pub async fn generate_ranges<P>(config: &IplistConfig, status: &RwLock<AppStatus>) -> IpRanges
 where
     P: LocationParser + AsnParser,
 {
-    let locations = match P::locations(config).await {
-        Ok(locations) => locations
-            .into_iter()
-            .filter(|l| !l.code.is_empty())
-            .sorted_by_key(|l| l.code.clone())
-            .collect::<Vec<_>>(),
-        Err(e) => {
-            let msg = format!("failed to load locations: {e}");
-            error!("{msg}");
+    let mut is_geo_ok = true;
+    let (locations, location_ranges) = match load_locations::<P>(config).await {
+        Ok((locations, location_ranges)) => {
             let mut status = status.write().await;
-            status.locations.error(&msg);
-            status.geo.warning(&msg);
-            vec![]
+            status.locations.ok("locations loaded successfully");
+            (locations, location_ranges)
         }
-    };
-    let location_ranges = match P::location_ranges(config, &locations).await {
-        Ok(ranges) => ranges,
         Err(e) => {
-            let msg = format!("failed to load countries: {e}");
-            error!("{msg}");
+            error!("{e}");
             let mut status = status.write().await;
-            status.locations.error(&msg);
-            status.geo.warning(&msg);
-            vec![]
+            status.locations.error(e.to_string());
+            is_geo_ok = false;
+            (vec![], vec![])
         }
     };
     let asn_ranges = match P::asn_ranges(config).await {
-        Ok(ranges) => ranges,
+        Ok(ranges) => {
+            let mut status = status.write().await;
+            status.asns.ok("ASN ranges loaded successfully");
+            ranges
+        }
         Err(e) => {
             let msg = format!("failed to load ASNs: {e}");
             error!("{msg}");
             let mut status = status.write().await;
             status.asns.error(&msg);
-            status.geo.warning(&msg);
+            is_geo_ok = false;
             vec![]
         }
     };
+
+    if is_geo_ok {
+        let mut status = status.write().await;
+        status.geo.ok("Geo data loaded successfully");
+    } else {
+        let mut status = status.write().await;
+        status.geo.warning("Geo data is not available");
+    }
+
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     if let Err(e) = ip_ranges.location_ranges.save(config).await {
         let msg = format!("failed to save locations: {e}");

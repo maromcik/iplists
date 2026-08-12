@@ -68,6 +68,7 @@ where
     ) -> BlocklistRanges<Ipv4, Ipv6> {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
+        let mut ok = true;
         for blocklist in &config.url_blocklist {
             match BlocklistRanges::download(blocklist).await {
                 Ok(ranges) => {
@@ -81,6 +82,7 @@ where
                     merged.merge(ranges);
                 }
                 Err(e) => {
+                    ok = false;
                     match load_blocklist::<Ipv4, Ipv6>(&blocklist.backup_path).await {
                         Ok(ranges) => {
                             merged.merge(ranges);
@@ -103,6 +105,7 @@ where
         match BlocklistRanges::load(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
+                ok = false;
                 let msg = format!("failed to load custom blocklist ranges: {}", e);
                 error!("{msg}");
                 status.write().await.blocklist.warning(msg);
@@ -146,7 +149,13 @@ where
             ipv4: ipv4_blocklist,
             ipv6: ipv6_blocklist,
         };
-
+        if ok {
+            status
+                .write()
+                .await
+                .blocklist
+                .ok("blocklist fetched successfully");
+        }
         result.deduplicate()
     }
 
