@@ -73,7 +73,7 @@ where
             match BlocklistRanges::download(blocklist).await {
                 Ok(ranges) => {
                     if let Err(e) = save_blocklist(&ranges, &blocklist.backup_path).await {
-                        let msg = format!("failed to save blocklist to disk: {}", e);
+                        let msg = format!("Failed to save blocklist to disk: {}", e);
                         warn!("{msg}");
                         status.write().await.blocklist.warning(msg);
                     } else {
@@ -89,12 +89,12 @@ where
                             debug!("loaded blocklist from disk: {}", blocklist.backup_path);
                         }
                         Err(e) => {
-                            let msg = format!("failed to load blocklist from disk: {}", e);
+                            let msg = format!("Failed to load blocklist from disk: {}", e);
                             warn!("{msg}");
                             status.write().await.blocklist.warning(msg);
                         }
                     }
-                    let msg = format!("failed to download blocklist from: {}", e);
+                    let msg = format!("Failed to download blocklist from: {}", e);
                     error!("{msg}");
                     status.write().await.blocklist.error(msg);
                 }
@@ -106,7 +106,7 @@ where
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
                 ok = false;
-                let msg = format!("failed to load custom blocklist ranges: {}", e);
+                let msg = format!("Failed to load custom blocklist ranges: {}", e);
                 error!("{msg}");
                 status.write().await.blocklist.warning(msg);
             }
@@ -116,7 +116,7 @@ where
         let allowlist = match BlocklistRanges::load(&config.custom_allowlist).await {
             Ok(ranges) => ranges,
             Err(e) => {
-                let msg = format!("failed to load custom allowlist ranges: {}", e);
+                let msg = format!("Failed to load custom allowlist ranges: {}", e);
                 error!("{msg}");
                 warn!("returning blocklist without allowlist");
                 status.write().await.blocklist.warning(msg);
@@ -154,7 +154,7 @@ where
                 .write()
                 .await
                 .blocklist
-                .ok("blocklist fetched successfully");
+                .ok("Blocklist loaded successfully");
         }
         result.deduplicate()
     }

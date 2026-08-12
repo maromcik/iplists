@@ -342,14 +342,14 @@ where
 {
     let locations = P::locations(config)
         .await
-        .map_err(|e| AppError::ListLoadError(format!("failed to load locations: {e}")))?
+        .map_err(|e| AppError::ListLoadError(format!("Failed to load locations: {e}")))?
         .into_iter()
         .filter(|l| !l.code.is_empty())
         .sorted_by_key(|l| l.code.clone())
         .collect::<Vec<_>>();
     let location_ranges = P::location_ranges(config, &locations)
         .await
-        .map_err(|e| AppError::ListLoadError(format!("failed to load countries: {e}")))?;
+        .map_err(|e| AppError::ListLoadError(format!("Failed to load countries: {e}")))?;
     Ok((locations, location_ranges))
 }
 pub async fn generate_ranges<P>(config: &IplistConfig, status: &RwLock<AppStatus>) -> IpRanges
@@ -360,7 +360,7 @@ where
     let (locations, location_ranges) = match load_locations::<P>(config).await {
         Ok((locations, location_ranges)) => {
             let mut status = status.write().await;
-            status.locations.ok("locations loaded successfully");
+            status.locations.ok("Locations loaded successfully");
             (locations, location_ranges)
         }
         Err(e) => {
@@ -378,7 +378,7 @@ where
             ranges
         }
         Err(e) => {
-            let msg = format!("failed to load ASNs: {e}");
+            let msg = format!("Failed to load ASNs: {e}");
             error!("{msg}");
             let mut status = status.write().await;
             status.asns.error(&msg);
@@ -397,7 +397,7 @@ where
 
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     if let Err(e) = ip_ranges.location_ranges.save(config).await {
-        let msg = format!("failed to save locations: {e}");
+        let msg = format!("Failed to save locations: {e}");
         error!("{msg}");
         let mut status = status.write().await;
         status.locations.warning(msg);
