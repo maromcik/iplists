@@ -1,8 +1,14 @@
 use croner::Cron;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use time::OffsetDateTime;
+use time::{OffsetDateTime, UtcOffset};
 
 use crate::error::AppError;
+
+/// Current time in the system's local timezone; falls back to UTC if the
+/// local offset cannot be determined.
+fn now_local() -> OffsetDateTime {
+    OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StatusCode {
@@ -96,13 +102,13 @@ pub struct UpdateStatus {
 impl UpdateStatus {
     pub fn update_new(next_update: Option<OffsetDateTime>) -> Self {
         Self {
-            last_update: Some(OffsetDateTime::now_utc()),
+            last_update: Some(now_local()),
             next_update,
         }
     }
 
     pub fn update(&mut self, next_update: Option<OffsetDateTime>) {
-        self.last_update = Some(OffsetDateTime::now_utc());
+        self.last_update = Some(now_local());
         self.next_update = next_update;
     }
 }
@@ -199,18 +205,19 @@ impl Schedule {
     }
 
     pub fn get_next_run_blocklist(&self) -> Option<OffsetDateTime> {
-        let next = self
-            .blocklist_cron
-            .find_next_occurrence(&chrono::Utc::now(), false)
-            .ok()?;
-        OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
+        Self::next_run(&self.blocklist_cron)
     }
 
     pub fn get_next_run_iplist(&self) -> Option<OffsetDateTime> {
-        let next = self
-            .iplist_cron
-            .find_next_occurrence(&chrono::Utc::now(), false)
+        Self::next_run(&self.iplist_cron)
+    }
+
+    fn next_run(cron: &Cron) -> Option<OffsetDateTime> {
+        let next = cron
+            .find_next_occurrence(&chrono::Local::now(), false)
             .ok()?;
-        OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()
+        let instant = OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()?;
+        let offset = UtcOffset::from_whole_seconds(next.offset().local_minus_utc()).ok()?;
+        Some(instant.to_offset(offset))
     }
 }

@@ -64,7 +64,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
-        let schedules = Schedule::new(&config.iplist.cron, &config.blocklist.cron)?;
+        let schedules = Schedule::new(&config.blocklist.cron, &config.iplist.cron)?;
         let status = RwLock::new(AppStatus::default());
         let next_iplist_run = schedules.get_next_run_iplist();
         let next_blocklist_run = schedules.get_next_run_blocklist();
