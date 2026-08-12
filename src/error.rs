@@ -53,6 +53,8 @@ pub enum AppError {
     AddressManipulationError(String),
     #[error("Serde error: {0}")]
     SerdeError(String),
+    #[error("IP List could not be loaded: {0}")]
+    ListLoadError(String),
 }
 
 impl Debug for AppError {
