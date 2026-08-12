@@ -228,9 +228,9 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
             let state_local = state_local.clone();
             Box::pin(async move {
                 debug!("scheduler:starting iplist update");
-                let next = next_run(&config_local.cron);
                 let ranges =
                     generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await;
+                let next = next_run(&config_local.cron);
                 *state_local.ip_ranges.write().await = ranges;
                 let mut status = state_local.status.write().await;
                 status.asns.update.update(next);

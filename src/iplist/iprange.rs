@@ -345,9 +345,9 @@ where
             .sorted_by_key(|l| l.code.clone())
             .collect::<Vec<_>>(),
         Err(e) => {
-            let mut status = status.write().await;
             let msg = format!("failed to load locations: {e}");
             error!("{msg}");
+            let mut status = status.write().await;
             status.locations.error(&msg);
             status.geo.warning(&msg);
             vec![]
@@ -356,9 +356,9 @@ where
     let location_ranges = match P::location_ranges(config, &locations).await {
         Ok(ranges) => ranges,
         Err(e) => {
-            let mut status = status.write().await;
             let msg = format!("failed to load countries: {e}");
             error!("{msg}");
+            let mut status = status.write().await;
             status.locations.error(&msg);
             status.geo.warning(&msg);
             vec![]
@@ -367,9 +367,9 @@ where
     let asn_ranges = match P::asn_ranges(config).await {
         Ok(ranges) => ranges,
         Err(e) => {
-            let mut status = status.write().await;
             let msg = format!("failed to load ASNs: {e}");
             error!("{msg}");
+            let mut status = status.write().await;
             status.asns.error(&msg);
             status.geo.warning(&msg);
             vec![]
@@ -377,9 +377,9 @@ where
     };
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     if let Err(e) = ip_ranges.location_ranges.save(config).await {
-        let mut status = status.write().await;
         let msg = format!("failed to save locations: {e}");
         error!("{msg}");
+        let mut status = status.write().await;
         status.locations.warning(msg);
     }
 
