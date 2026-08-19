@@ -14,7 +14,7 @@ use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use ipnet::{Ipv4Net, Ipv6Net};
-use log::{debug, info};
+use log::{debug, error, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -78,7 +78,7 @@ impl AppState {
 
         let blocklist_ranges =
             BlocklistRanges::merged_blocklist_ranges(&config.blocklist, &status).await;
-        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist, &status).await;
+        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist, &status).await?;
         Ok(Arc::new(Self {
             config,
             status,
@@ -230,15 +230,25 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
             let state_local = state_local.clone();
             Box::pin(async move {
                 debug!("scheduler:starting iplist update");
-                let ranges =
-                    generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await;
-                let next = state_local.schedules.get_next_run_iplist();
-                *state_local.ip_ranges.write().await = ranges;
+                match generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await {
+                    Ok(ranges) => {
+                        *state_local.ip_ranges.write().await = ranges;
+                        let mut status = state_local.status.write().await;
+                        status.iplist_ok("Component is up-to-date");
+                        info!("scheduler:iplist update completed");
+                    }
+                    Err(e) => {
+                        let mut status = state_local.status.write().await;
+                        status.iplist_error(&e.to_string());
+                        error!("scheduler:iplist update failed: {e}");
+                    }
+                }
                 let mut status = state_local.status.write().await;
+                let next = state_local.schedules.get_next_run_iplist();
+
                 status.asns.update.update(next);
                 status.locations.update.update(next);
                 status.geo.update.update(next);
-                info!("scheduler:iplist update completed");
             })
         })?)
         .await?;

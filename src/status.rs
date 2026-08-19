@@ -123,7 +123,7 @@ impl ComponentStatus {
     /// Component is healthy and has just been refreshed.
     pub fn ok_new(next_update: Option<OffsetDateTime>) -> Self {
         Self {
-            status: Status::ok("component is up-to-date"),
+            status: Status::ok("Component is up-to-date"),
             update: UpdateStatus::update_new(next_update),
         }
     }
@@ -166,6 +166,19 @@ impl AppStatus {
         .max_by_key(|s| s.status_code)
         .cloned()
         .unwrap_or_default()
+    }
+
+    pub fn iplist_error(&mut self, message: &str) {
+        self.locations.error(message);
+        self.asns.error(message);
+        self.geo.error(message);
+        self.blocklist.error(message);
+    }
+
+    pub fn iplist_ok(&mut self, message: &str) {
+        self.locations.ok(message);
+        self.asns.ok(message);
+        self.geo.ok(message);
     }
 }
 

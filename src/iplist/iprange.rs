@@ -376,48 +376,17 @@ where
         .map_err(|e| AppError::ListLoadError(format!("Failed to load countries: {e}")))?;
     Ok((locations, location_ranges))
 }
-pub async fn generate_ranges<P>(config: &IplistConfig, status: &RwLock<AppStatus>) -> IpRanges
+pub async fn generate_ranges<P>(
+    config: &IplistConfig,
+    status: &RwLock<AppStatus>,
+) -> Result<IpRanges, AppError>
 where
     P: LocationParser + AsnParser,
 {
-    let mut is_geo_ok = true;
-    let (locations, location_ranges) = match load_locations::<P>(config).await {
-        Ok((locations, location_ranges)) => {
-            let mut status = status.write().await;
-            status.locations.ok("Locations loaded successfully");
-            (locations, location_ranges)
-        }
-        Err(e) => {
-            error!("{e}");
-            let mut status = status.write().await;
-            status.locations.error(e.to_string());
-            is_geo_ok = false;
-            (vec![], vec![])
-        }
-    };
-    let asn_ranges = match P::asn_ranges(config).await {
-        Ok(ranges) => {
-            let mut status = status.write().await;
-            status.asns.ok("ASN ranges loaded successfully");
-            ranges
-        }
-        Err(e) => {
-            let msg = format!("Failed to load ASNs: {e}");
-            error!("{msg}");
-            let mut status = status.write().await;
-            status.asns.error(&msg);
-            is_geo_ok = false;
-            vec![]
-        }
-    };
-
-    if is_geo_ok {
-        let mut status = status.write().await;
-        status.geo.ok("Geo data loaded successfully");
-    } else {
-        let mut status = status.write().await;
-        status.geo.warning("Geo data is not available");
-    }
+    let (locations, location_ranges) = load_locations::<P>(config).await?;
+    let asn_ranges = P::asn_ranges(config)
+        .await
+        .map_err(|e| AppError::ListLoadError(format!("Failed to load ASNs: {e}")))?;
 
     let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
     if let Err(e) = ip_ranges.location_ranges.save(config).await {
@@ -427,5 +396,5 @@ where
         status.locations.warning(msg);
     }
 
-    ip_ranges
+    Ok(ip_ranges)
 }
