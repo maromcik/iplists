@@ -121,9 +121,9 @@ pub struct ComponentStatus {
 
 impl ComponentStatus {
     /// Component is healthy and has just been refreshed.
-    pub fn ok_new(next_update: Option<OffsetDateTime>) -> Self {
+    pub fn new(next_update: Option<OffsetDateTime>) -> Self {
         Self {
-            status: Status::ok("Component is up-to-date"),
+            status: Status::warning("Component not updated"),
             update: UpdateStatus::update_new(next_update),
         }
     }

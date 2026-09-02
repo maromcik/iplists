@@ -4,8 +4,8 @@ use crate::handlers::iplist::{
     geo_location, get_all_continents, get_all_countries, get_by_asn, get_by_location,
 };
 use crate::handlers::status::get_status;
-use crate::iplist::iprange::{IpRanges, generate_ranges};
 use crate::iplist::parsers::maxmind::MaxMindParser;
+use crate::list::{IpLists, update_ranges};
 use crate::status::{AppStatus, ComponentStatus, Schedule};
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
@@ -14,7 +14,7 @@ use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use ipnet::{Ipv4Net, Ipv6Net};
-use log::{debug, error, info};
+use log::{debug, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -38,6 +38,7 @@ pub mod forms;
 pub mod handlers;
 pub mod iplist;
 pub mod iptools;
+pub mod list;
 pub mod models;
 pub mod status;
 
@@ -57,8 +58,8 @@ struct Cli {
 pub struct AppState {
     pub config: AppConfig,
     pub status: RwLock<AppStatus>,
-    pub ip_ranges: RwLock<IpRanges>,
-    pub blocklist_ranges: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
+    pub ip_lists: IpLists,
+    pub blocklist: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
     pub schedules: Schedule,
 }
 
@@ -70,20 +71,19 @@ impl AppState {
         let next_blocklist_run = schedules.get_next_run_blocklist();
         {
             let mut status = status.write().await;
-            status.locations = ComponentStatus::ok_new(next_iplist_run);
-            status.asns = ComponentStatus::ok_new(next_iplist_run);
-            status.geo = ComponentStatus::ok_new(next_iplist_run);
-            status.blocklist = ComponentStatus::ok_new(next_blocklist_run);
+            status.locations = ComponentStatus::new(next_iplist_run);
+            status.asns = ComponentStatus::new(next_iplist_run);
+            status.geo = ComponentStatus::new(next_iplist_run);
+            status.blocklist = ComponentStatus::new(next_blocklist_run);
         }
 
         let blocklist_ranges =
             BlocklistRanges::merged_blocklist_ranges(&config.blocklist, &status).await;
-        let ip_ranges = generate_ranges::<MaxMindParser>(&config.iplist, &status).await?;
         Ok(Arc::new(Self {
             config,
             status,
-            ip_ranges: RwLock::new(ip_ranges),
-            blocklist_ranges: RwLock::new(blocklist_ranges),
+            ip_lists: IpLists::default(),
+            blocklist: RwLock::new(blocklist_ranges),
             schedules,
         }))
     }
@@ -123,6 +123,7 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         .init();
 
     let state: Arc<AppState> = AppState::new(config.clone()).await?;
+    update_ranges::<MaxMindParser>(state.clone()).await;
     schedule_tasks(state.clone(), &config).await?;
 
     let api_routes = Router::new()
@@ -222,27 +223,13 @@ async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>,
 
 async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), AppError> {
     let scheduler = JobScheduler::new().await?;
-    let config_local = config.iplist.clone();
     let state_local = state.clone();
     scheduler
         .add(Job::new_async(&config.iplist.cron, move |_uuid, _lock| {
-            let config_local = config_local.clone();
             let state_local = state_local.clone();
             Box::pin(async move {
                 debug!("scheduler:starting iplist update");
-                match generate_ranges::<MaxMindParser>(&config_local, &state_local.status).await {
-                    Ok(ranges) => {
-                        *state_local.ip_ranges.write().await = ranges;
-                        let mut status = state_local.status.write().await;
-                        status.iplist_ok("Component is up-to-date");
-                        info!("scheduler:iplist update completed");
-                    }
-                    Err(e) => {
-                        let mut status = state_local.status.write().await;
-                        status.iplist_error(&e.to_string());
-                        error!("scheduler:iplist update failed: {e}");
-                    }
-                }
+                update_ranges::<MaxMindParser>(state_local.clone()).await;
                 let mut status = state_local.status.write().await;
                 let next = state_local.schedules.get_next_run_iplist();
 
@@ -268,7 +255,7 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
                         &state_local.status,
                     )
                     .await;
-                    *state_local.blocklist_ranges.write().await = merged;
+                    *state_local.blocklist.write().await = merged;
                     let next = state_local.schedules.get_next_run_blocklist();
                     let mut status = state_local.status.write().await;
                     status.blocklist.update.update(next);

@@ -12,7 +12,7 @@ pub async fn get_blocklist(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<BlocklistIpVersion>,
 ) -> Result<impl IntoResponse, AppError> {
-    let blocklist = state.blocklist_ranges.read().await;
+    let blocklist = state.blocklist.read().await;
 
     let formatted = match form.version {
         Some(IpVersion::Ipv4) => form.format.format(&blocklist.ipv4, Some("blocklist")),

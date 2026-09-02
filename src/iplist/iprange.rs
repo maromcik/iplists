@@ -1,16 +1,13 @@
 use crate::iplist::formatter::{OutputFormat, save_data};
 use crate::iptools::iptrie::IPTrie;
 use crate::iptools::network::ListNetwork;
-use crate::status::AppStatus;
 use crate::{error::AppError, iplist::config::IplistConfig};
 use ipnet::IpNet;
-use itertools::Itertools;
-use log::{debug, error, info};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::time::Instant;
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -59,9 +56,63 @@ pub struct IpAsnRangeByIp {
     pub ipv6: Vec<Arc<IpAsnRange>>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Default, Clone)]
 pub struct IpAsnRanges {
     pub by_asn: HashMap<u32, Arc<IpAsnRangeByIp>>,
+    pub trie: IPTrieAsnRanges,
+}
+
+impl IpAsnRanges {
+    pub fn new(mut asn_ranges: Vec<IpAsnRange>) -> Self {
+        let t = Instant::now();
+        let mut ipv4_trie_asn = IPTrie::new();
+        let mut ipv6_trie_asn = IPTrie::new();
+        let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
+
+        asn_ranges.sort_by_key(ListNetwork::network_prefix);
+
+        for range in asn_ranges {
+            let range = Arc::new(range);
+            if range.network.is_ipv4() {
+                if ipv4_trie_asn.insert(&range) {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv4
+                        .push(range);
+                }
+            } else {
+                if ipv6_trie_asn.insert(&range) {
+                    asn_ranges_by_asn
+                        .entry(range.asn)
+                        .or_default()
+                        .ipv6
+                        .push(range);
+                }
+            }
+        }
+
+        let asn_ranges_count = asn_ranges_by_asn.len();
+
+        let trie_asn_ranges = IPTrieAsnRanges {
+            ipv4: ipv4_trie_asn,
+            ipv6: ipv6_trie_asn,
+        };
+
+        info!(
+            "loaded {} unique ASN ranges in {}ms",
+            asn_ranges_count,
+            t.elapsed().as_millis()
+        );
+
+        Self {
+            by_asn: asn_ranges_by_asn
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+            trie: trie_asn_ranges,
+        }
+    }
 }
 
 #[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -71,13 +122,83 @@ pub struct IpLocationRangeByIp {
     pub ipv6: Vec<Arc<IpLocationRange>>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Default, Clone)]
 pub struct IpLocationRanges {
     pub by_country: HashMap<String, Arc<IpLocationRangeByIp>>,
     pub by_continent: HashMap<String, Arc<IpLocationRangeByIp>>,
+    pub trie: IPTrieLocationRanges,
+    pub locations: Arc<Vec<Location>>,
 }
 
 impl IpLocationRanges {
+    pub fn new(locations: Vec<Location>, mut location_ranges: Vec<IpLocationRange>) -> Self {
+        let t = Instant::now();
+
+        let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
+        let mut ipv4_trie_location = IPTrie::new();
+        let mut ipv6_trie_location = IPTrie::new();
+
+        location_ranges.sort_by_key(ListNetwork::network_prefix);
+
+        for range in location_ranges {
+            let range = Arc::new(range);
+            if range.network.is_ipv4() {
+                if ipv4_trie_location.insert(&range) {
+                    location_ranges_by_country
+                        .entry(range.location.code.clone())
+                        .or_default()
+                        .ipv4
+                        .push(Arc::clone(&range));
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv4
+                        .push(range);
+                }
+            } else {
+                if ipv6_trie_location.insert(&range) {
+                    location_ranges_by_country
+                        .entry(range.location.code.clone())
+                        .or_default()
+                        .ipv6
+                        .push(Arc::clone(&range));
+                    location_ranges_by_continent
+                        .entry(range.location.continent.clone())
+                        .or_default()
+                        .ipv6
+                        .push(range);
+                }
+            }
+        }
+
+        let location_ranges_count = location_ranges_by_country.len();
+
+        let trie_location_ranges = IPTrieLocationRanges {
+            ipv4: ipv4_trie_location,
+            ipv6: ipv6_trie_location,
+        };
+
+        info!(
+            "loaded {} unique location ranges in {}ms",
+            location_ranges_count,
+            t.elapsed().as_millis()
+        );
+
+        Self {
+            by_country: location_ranges_by_country
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+            by_continent: location_ranges_by_continent
+                .into_iter()
+                .map(|(k, v)| (k, Arc::new(v)))
+                .collect(),
+            trie: trie_location_ranges,
+            locations: Arc::new(locations),
+        }
+    }
+
     pub async fn save(&self, config: &IplistConfig) -> Result<(), AppError> {
         let t = Instant::now();
         tokio::fs::create_dir_all(format!("{}/{}", config.output_folder, "gen")).await?;
@@ -195,206 +316,4 @@ pub struct IPTrieLocationRanges {
 pub struct IPTrieAsnRanges {
     pub ipv4: IPTrie<Arc<IpAsnRange>>,
     pub ipv6: IPTrie<Arc<IpAsnRange>>,
-}
-
-#[derive(Clone, Default)]
-pub struct IpRanges {
-    pub location_ranges: IpLocationRanges,
-    pub asn_ranges: IpAsnRanges,
-    pub trie_location_ranges: IPTrieLocationRanges,
-    pub trie_asn_ranges: IPTrieAsnRanges,
-    pub locations: Arc<Vec<Location>>,
-}
-
-impl IpRanges {
-    pub fn new(
-        mut location_ranges: Vec<IpLocationRange>,
-        mut asn_ranges: Vec<IpAsnRange>,
-        locations: Vec<Location>,
-    ) -> Self {
-        let t = Instant::now();
-
-        let mut location_ranges_by_country: HashMap<String, IpLocationRangeByIp> = HashMap::new();
-        let mut location_ranges_by_continent: HashMap<String, IpLocationRangeByIp> = HashMap::new();
-        let mut ipv4_trie_location = IPTrie::new();
-        let mut ipv6_trie_location = IPTrie::new();
-
-        location_ranges.sort_by_key(ListNetwork::network_prefix);
-        asn_ranges.sort_by_key(ListNetwork::network_prefix);
-
-        for range in location_ranges {
-            let range = Arc::new(range);
-            if range.network.is_ipv4() {
-                if ipv4_trie_location.insert(&range) {
-                    location_ranges_by_country
-                        .entry(range.location.code.clone())
-                        .or_default()
-                        .ipv4
-                        .push(Arc::clone(&range));
-                    location_ranges_by_continent
-                        .entry(range.location.continent.clone())
-                        .or_default()
-                        .ipv4
-                        .push(range);
-                }
-            } else {
-                if ipv6_trie_location.insert(&range) {
-                    location_ranges_by_country
-                        .entry(range.location.code.clone())
-                        .or_default()
-                        .ipv6
-                        .push(Arc::clone(&range));
-                    location_ranges_by_continent
-                        .entry(range.location.continent.clone())
-                        .or_default()
-                        .ipv6
-                        .push(range);
-                }
-            }
-        }
-
-        let mut ipv4_trie_asn = IPTrie::new();
-        let mut ipv6_trie_asn = IPTrie::new();
-        let mut asn_ranges_by_asn: HashMap<u32, IpAsnRangeByIp> = HashMap::new();
-        for range in asn_ranges {
-            let range = Arc::new(range);
-            if range.network.is_ipv4() {
-                if ipv4_trie_asn.insert(&range) {
-                    asn_ranges_by_asn
-                        .entry(range.asn)
-                        .or_default()
-                        .ipv4
-                        .push(range);
-                }
-            } else {
-                if ipv6_trie_asn.insert(&range) {
-                    asn_ranges_by_asn
-                        .entry(range.asn)
-                        .or_default()
-                        .ipv6
-                        .push(range);
-                }
-            }
-        }
-
-        let location_ranges_count = location_ranges_by_country.len();
-        let asn_ranges_count = asn_ranges_by_asn.len();
-
-        let location_ranges = IpLocationRanges {
-            by_country: location_ranges_by_country
-                .into_iter()
-                .map(|(k, v)| (k, Arc::new(v)))
-                .collect(),
-            by_continent: location_ranges_by_continent
-                .into_iter()
-                .map(|(k, v)| (k, Arc::new(v)))
-                .collect(),
-        };
-        let asn_ranges = IpAsnRanges {
-            by_asn: asn_ranges_by_asn
-                .into_iter()
-                .map(|(k, v)| (k, Arc::new(v)))
-                .collect(),
-        };
-        let trie_location_ranges = IPTrieLocationRanges {
-            ipv4: ipv4_trie_location,
-            ipv6: ipv6_trie_location,
-        };
-        let trie_asn_ranges = IPTrieAsnRanges {
-            ipv4: ipv4_trie_asn,
-            ipv6: ipv6_trie_asn,
-        };
-
-        info!(
-            "loaded {} unique location ranges and {} unique ASN ranges in {}ms",
-            location_ranges_count,
-            asn_ranges_count,
-            t.elapsed().as_millis()
-        );
-
-        Self {
-            location_ranges,
-            asn_ranges,
-            trie_location_ranges,
-            trie_asn_ranges,
-            locations: Arc::new(locations),
-        }
-    }
-
-    pub async fn get_by_continent(
-        &self,
-        continent: &str,
-    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
-        let Some(ranges) = self.location_ranges.by_continent.get(continent) else {
-            return Err(AppError::NotFound(format!(
-                "No location ranges found for continent: {}",
-                continent
-            )));
-        };
-        Ok(ranges.clone())
-    }
-
-    pub async fn get_by_country(
-        &self,
-        country_alpha2: &str,
-    ) -> Result<Arc<IpLocationRangeByIp>, AppError> {
-        let Some(ranges) = self.location_ranges.by_country.get(country_alpha2) else {
-            return Err(AppError::NotFound(format!(
-                "No location ranges found for country: {}",
-                country_alpha2
-            )));
-        };
-        Ok(ranges.clone())
-    }
-
-    pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp>, AppError> {
-        let Some(ranges) = self.asn_ranges.by_asn.get(asn) else {
-            return Err(AppError::NotFound(format!(
-                "No ASN ranges found for ASN: {}",
-                asn
-            )));
-        };
-        Ok(ranges.clone())
-    }
-}
-
-pub async fn load_locations<P>(
-    config: &IplistConfig,
-) -> Result<(Vec<Location>, Vec<IpLocationRange>), AppError>
-where
-    P: LocationParser + AsnParser,
-{
-    let locations = P::locations(config)
-        .await
-        .map_err(|e| AppError::ListLoadError(format!("Failed to load locations: {e}")))?
-        .into_iter()
-        .filter(|l| !l.code.is_empty())
-        .sorted_by_key(|l| l.code.clone())
-        .collect::<Vec<_>>();
-    let location_ranges = P::location_ranges(config, &locations)
-        .await
-        .map_err(|e| AppError::ListLoadError(format!("Failed to load countries: {e}")))?;
-    Ok((locations, location_ranges))
-}
-pub async fn generate_ranges<P>(
-    config: &IplistConfig,
-    status: &RwLock<AppStatus>,
-) -> Result<IpRanges, AppError>
-where
-    P: LocationParser + AsnParser,
-{
-    let (locations, location_ranges) = load_locations::<P>(config).await?;
-    let asn_ranges = P::asn_ranges(config)
-        .await
-        .map_err(|e| AppError::ListLoadError(format!("Failed to load ASNs: {e}")))?;
-
-    let ip_ranges = IpRanges::new(location_ranges, asn_ranges, locations);
-    if let Err(e) = ip_ranges.location_ranges.save(config).await {
-        let msg = format!("Failed to save locations: {e}");
-        error!("{msg}");
-        let mut status = status.write().await;
-        status.locations.warning(msg);
-    }
-
-    Ok(ip_ranges)
 }

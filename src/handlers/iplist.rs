@@ -17,7 +17,13 @@ use std::sync::Arc;
 pub async fn get_all_countries(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let countries = state.ip_ranges.read().await.locations.clone();
+    let countries = state
+        .ip_lists
+        .location_ranges
+        .read()
+        .await
+        .locations
+        .clone();
     Ok(Json(countries))
 }
 
@@ -25,7 +31,8 @@ pub async fn get_all_continents(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
     let continents = state
-        .ip_ranges
+        .ip_lists
+        .location_ranges
         .read()
         .await
         .locations
@@ -58,24 +65,19 @@ pub async fn get_by_location(
     AppQuery(form): AppQuery<IpListFormByCountry>,
 ) -> Result<impl IntoResponse, AppError> {
     let formatted = if let Some(continent) = &form.continent {
-        let ips = state
-            .ip_ranges
-            .read()
-            .await
-            .get_by_continent(continent)
-            .await?;
+        let ips = state.ip_lists.get_by_continent(continent).await?;
         form.format
             .format(&get_ips_by_version(ips, &form), form.continent.as_deref())
     } else if let Some(country) = &form.country {
-        let ips = state.ip_ranges.read().await.get_by_country(country).await?;
+        let ips = state.ip_lists.get_by_country(country).await?;
         form.format
             .format(&get_ips_by_version(ips, &form), form.country.as_deref())
     } else {
         let ips = state
-            .ip_ranges
+            .ip_lists
+            .location_ranges
             .read()
             .await
-            .location_ranges
             .by_continent
             .values()
             .fold(IpLocationRangeByIp::default(), |mut acc, v| {
@@ -95,22 +97,16 @@ pub async fn get_by_asn(
     AppQuery(form): AppQuery<IpListFormByAsn>,
 ) -> Result<impl IntoResponse, AppError> {
     let ips = if let Some(asn) = &form.asn {
-        state.ip_ranges.read().await.get_by_asn(asn).await?
+        state.ip_lists.get_by_asn(asn).await?
     } else {
-        Arc::new(
-            state
-                .ip_ranges
-                .read()
-                .await
-                .asn_ranges
-                .by_asn
-                .values()
-                .fold(IpAsnRangeByIp::default(), |mut acc, v| {
-                    acc.ipv4.extend(v.ipv4.iter().cloned());
-                    acc.ipv6.extend(v.ipv6.iter().cloned());
-                    acc
-                }),
-        )
+        Arc::new(state.ip_lists.asn_ranges.read().await.by_asn.values().fold(
+            IpAsnRangeByIp::default(),
+            |mut acc, v| {
+                acc.ipv4.extend(v.ipv4.iter().cloned());
+                acc.ipv6.extend(v.ipv6.iter().cloned());
+                acc
+            },
+        ))
     };
     let ips = match form.version {
         Some(IpVersion::Ipv4) => ips.ipv4.clone(),
@@ -133,15 +129,16 @@ pub async fn geo_location(
     AppQuery(form): AppQuery<ApiGeoLocation>,
 ) -> Result<impl IntoResponse, AppError> {
     let key = TrieKey::from(form.ip);
-    let readguard = state.ip_ranges.read().await;
+    let locations_guard = state.ip_lists.location_ranges.read().await;
+    let asns_guard = state.ip_lists.asn_ranges.read().await;
     let (location, asn) = match form.ip {
         IpAddr::V4(_) => (
-            readguard.trie_location_ranges.ipv4.lookup(key),
-            readguard.trie_asn_ranges.ipv4.lookup(key),
+            locations_guard.trie.ipv4.lookup(key),
+            asns_guard.trie.ipv4.lookup(key),
         ),
         IpAddr::V6(_) => (
-            readguard.trie_location_ranges.ipv6.lookup(key),
-            readguard.trie_asn_ranges.ipv6.lookup(key),
+            locations_guard.trie.ipv6.lookup(key),
+            asns_guard.trie.ipv6.lookup(key),
         ),
     };
 
