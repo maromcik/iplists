@@ -9,7 +9,6 @@ use crate::models::iprange::CombinedIpRange;
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use ipnet::{IpNet, Ipv4Net};
 use itertools::Itertools;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -159,7 +158,7 @@ pub async fn geo_location(
         ),
         (None, Some(asn)) => CombinedIpRange::new(
             form.ip,
-            IpNet::V4(Ipv4Net::default()),
+            asn.network,
             asn.asn,
             asn.isp.clone(),
             Location::default(),
