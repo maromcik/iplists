@@ -147,6 +147,7 @@ impl ComponentStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppStatus {
     pub overall: Status,
+    pub db: Status,
     pub locations: ComponentStatus,
     pub asns: ComponentStatus,
     pub geo: ComponentStatus,
@@ -157,6 +158,7 @@ impl AppStatus {
     /// The most severe status across db and all components.
     pub fn worst(&self) -> Status {
         [
+            &self.db,
             &self.locations.status,
             &self.asns.status,
             &self.geo.status,
@@ -186,6 +188,7 @@ impl Default for AppStatus {
     fn default() -> Self {
         Self {
             overall: Status::never_updated(),
+            db: Status::ok("Embedded in-memory DB is always available"),
             locations: ComponentStatus::default(),
             asns: ComponentStatus::default(),
             geo: ComponentStatus::default(),

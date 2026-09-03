@@ -94,6 +94,19 @@
             </div>
         </div>
 
+        <div
+            class="border-l-4 {BANNER_COLORS[status.db.status_code]} rounded-xl shadow-sm p-5 mb-6 flex items-center gap-4"
+        >
+            <StatusBadge status={status.db} />
+            <div class="min-w-0">
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    Database
+                </h4>
+                <p class="text-sm text-gray-700 dark:text-gray-300 break-words">
+                    {status.db.message}
+                </p>
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {#each components as component (component.title)}

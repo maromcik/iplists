@@ -77,6 +77,7 @@ export function parseAppStatus(data: unknown): AppStatus {
     const record = expectRecord(data, "$");
     return {
         overall: parseStatusInfo(record.overall, "$.overall"),
+        db: parseStatusInfo(record.db, "$.db"),
         locations: parseComponentStatus(record.locations, "$.locations"),
         asns: parseComponentStatus(record.asns, "$.asns"),
         geo: parseComponentStatus(record.geo, "$.geo"),

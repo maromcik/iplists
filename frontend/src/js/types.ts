@@ -67,6 +67,7 @@ export interface ComponentStatus {
 
 export interface AppStatus {
     overall: StatusInfo;
+    db: StatusInfo;
     locations: ComponentStatus;
     asns: ComponentStatus;
     geo: ComponentStatus;
