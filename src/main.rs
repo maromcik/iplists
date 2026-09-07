@@ -8,8 +8,9 @@ use crate::iplist::parsers::maxmind::MaxMindParser;
 use crate::list::{IpLists, update_ranges};
 use crate::status::{AppStatus, ComponentStatus, Schedule};
 use crate::utils::request::real_ip_remote_addr;
-use axum::extract::{ConnectInfo, MatchedPath};
-use axum::http::{Request, Response};
+use axum::extract::{ConnectInfo, Request};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::routing::get;
 use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
@@ -19,13 +20,11 @@ use log::{debug, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::Instant;
 use tokio::net::lookup_host;
 use tokio::sync::RwLock;
 use tokio_cron_scheduler::{Job, JobScheduler};
 use tower_http::services::{ServeDir, ServeFile};
-use tower_http::trace::TraceLayer;
-use tracing::{field, info_span};
 use tracing_appender::non_blocking;
 
 use crate::blocklist::fetch::BlocklistRanges;
@@ -109,6 +108,45 @@ fn main() -> Result<(), AppError> {
         .block_on(run(config))
 }
 
+async fn access_log(req: Request, next: Next) -> Response {
+    let start = Instant::now();
+
+    let remote_addr = real_ip_remote_addr(&req)
+        .map(str::to_owned)
+        .or_else(|| {
+            req.extensions()
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|c| c.0.to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let method = req.method().clone();
+    let uri = req.uri().clone();
+    let version = req.version();
+    let user_agent = req
+        .headers()
+        .get(http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-")
+        .to_owned();
+    let referer = req
+        .headers()
+        .get(http::header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-")
+        .to_owned();
+
+    let response = next.run(req).await;
+
+    tracing::info!(
+        "{remote_addr} \"{method} {uri} {version:?}\" {} \"{referer}\" \"{user_agent}\" {}ms",
+        response.status().as_u16(),
+        start.elapsed().as_millis(),
+    );
+
+    response
+}
+
 async fn run(config: AppConfig) -> Result<(), AppError> {
     let env = EnvFilter::new(
         format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str(),
@@ -145,46 +183,7 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         .nest_service("/lists", ServeDir::new("lists"))
         .nest("/api", api_routes)
         .nest_service("/static", ServeDir::new("static"))
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(|req: &Request<_>| {
-                    let matched_path = req
-                        .extensions()
-                        .get::<MatchedPath>()
-                        .map(MatchedPath::as_str);
-
-                    let remote_addr = real_ip_remote_addr(req)
-                        .map(str::to_owned)
-                        .or_else(|| {
-                            req.extensions()
-                                .get::<ConnectInfo<SocketAddr>>()
-                                .map(|c| c.0.to_string())
-                        })
-                        .unwrap_or_else(|| "unknown".to_string());
-
-                    info_span!(
-                        "request",
-                        remote_addr = ?remote_addr,
-                        method = %req.method(),
-                        path = matched_path,
-                        uri = %req.uri(),
-                        version = ?req.version(),
-                        user_agent = ?req.headers().get(http::header::USER_AGENT).map(|v| v.to_str().unwrap_or_default()).unwrap_or("unknown"),
-                        referer = ?req.headers().get(http::header::REFERER).map(|v| v.to_str().unwrap_or_default()).unwrap_or("unknown"),
-                        status = field::Empty,
-                        latency_ms = field::Empty,
-
-                    )
-                })
-                .on_response(
-                    |res: &Response<_>, latency: Duration, span: &tracing::Span| {
-                        span.record("status", tracing::field::display(res.status()));
-                        span.record("latency_ms", latency.as_millis());
-
-                        tracing::info!(parent: span, "request");
-                    },
-                ),
-        )
+        .layer(middleware::from_fn(access_log))
         .with_state(state);
 
     let tls_config = if let (Some(cert), Some(key)) =
