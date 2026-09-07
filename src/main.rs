@@ -7,6 +7,7 @@ use crate::handlers::status::get_status;
 use crate::iplist::parsers::maxmind::MaxMindParser;
 use crate::list::{IpLists, update_ranges};
 use crate::status::{AppStatus, ComponentStatus, Schedule};
+use crate::utils::request::real_ip_remote_addr;
 use axum::extract::{ConnectInfo, MatchedPath};
 use axum::http::{Request, Response};
 use axum::routing::get;
@@ -41,6 +42,7 @@ pub mod iptools;
 pub mod list;
 pub mod models;
 pub mod status;
+pub mod utils;
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -151,11 +153,14 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
                         .get::<MatchedPath>()
                         .map(MatchedPath::as_str);
 
-                    let remote_addr = req
-                        .extensions()
-                        .get::<ConnectInfo<SocketAddr>>()
-                        .map(|c| c.0.to_string())
-                        .unwrap_or("unknown".to_string());
+                    let remote_addr = real_ip_remote_addr(req)
+                        .map(str::to_owned)
+                        .or_else(|| {
+                            req.extensions()
+                                .get::<ConnectInfo<SocketAddr>>()
+                                .map(|c| c.0.to_string())
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
 
                     info_span!(
                         "request",
