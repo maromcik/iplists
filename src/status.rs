@@ -1,6 +1,7 @@
 use croner::Cron;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::{OffsetDateTime, UtcOffset};
+use tokio::sync::RwLock;
 
 use crate::error::AppError;
 
@@ -55,6 +56,28 @@ pub struct Status {
     pub status_code: StatusCode,
     pub status_meaning: String,
     pub message: String,
+}
+
+// Statuses are compared only by severity, so the worst of a series of
+// failures can be picked without depending on message content.
+impl PartialEq for Status {
+    fn eq(&self, other: &Self) -> bool {
+        self.status_code == other.status_code
+    }
+}
+
+impl Eq for Status {}
+
+impl PartialOrd for Status {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Status {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.status_code.cmp(&other.status_code)
+    }
 }
 
 impl Status {
@@ -126,6 +149,11 @@ impl ComponentStatus {
             status: Status::warning("Component not updated"),
             update: UpdateStatus::update_new(next_update),
         }
+    }
+
+    /// Replace the status with a pre-built one (e.g. the worst of a run).
+    pub fn set(&mut self, status: Status) {
+        self.status = status;
     }
 
     pub fn ok(&mut self, message: impl Into<String>) {
@@ -235,5 +263,16 @@ impl Schedule {
         let instant = OffsetDateTime::from_unix_timestamp(next.timestamp()).ok()?;
         let offset = UtcOffset::from_whole_seconds(next.offset().local_minus_utc()).ok()?;
         Some(instant.to_offset(offset))
+    }
+}
+
+pub async fn store_worst_status(status: &RwLock<AppStatus>, failures: Vec<Status>) {
+    match failures.into_iter().reduce(|worst, next| worst.max(next)) {
+        Some(worst) => status.write().await.blocklist.set(worst),
+        None => status
+            .write()
+            .await
+            .blocklist
+            .ok("Blocklist loaded successfully"),
     }
 }

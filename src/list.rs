@@ -96,14 +96,15 @@ where
                 error!("{msg}");
                 let mut status = state.status.write().await;
                 status.locations.warning(msg);
+            } else {
+                *state.ip_lists.location_ranges.write().await = locations_ranges;
+                state
+                    .status
+                    .write()
+                    .await
+                    .locations
+                    .ok("Locations loaded successfully");
             }
-            *state.ip_lists.location_ranges.write().await = locations_ranges;
-            state
-                .status
-                .write()
-                .await
-                .locations
-                .ok("Locations loaded successfully");
         }
 
         Err(e) => {

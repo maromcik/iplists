@@ -2,7 +2,7 @@ use crate::blocklist::config::{BlocklistConfig, CustomListConfig, UrlBlocklist};
 use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
 use crate::iptools::network::{ListNetwork, Splitable};
-use crate::status::AppStatus;
+use crate::status::{AppStatus, Status, store_worst_status};
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
@@ -68,21 +68,20 @@ where
     ) -> BlocklistRanges<Ipv4, Ipv6> {
         debug!("downloading blocklist");
         let mut merged = BlocklistRanges::default();
-        let mut ok = true;
+        let mut failures: Vec<Status> = Vec::new();
         for blocklist in &config.url_blocklist {
             match BlocklistRanges::download(blocklist).await {
                 Ok(ranges) => {
                     if let Err(e) = save_blocklist(&ranges, &blocklist.backup_path).await {
                         let msg = format!("Failed to save blocklist to disk: {}", e);
                         warn!("{msg}");
-                        status.write().await.blocklist.warning(msg);
+                        failures.push(Status::warning(msg));
                     } else {
                         debug!("saved blocklist to disk: {}", blocklist.backup_path);
                     }
                     merged.merge(ranges);
                 }
                 Err(e) => {
-                    ok = false;
                     match load_blocklist::<Ipv4, Ipv6>(&blocklist.backup_path).await {
                         Ok(ranges) => {
                             merged.merge(ranges);
@@ -91,12 +90,12 @@ where
                         Err(e) => {
                             let msg = format!("Failed to load blocklist from disk: {}", e);
                             warn!("{msg}");
-                            status.write().await.blocklist.warning(msg);
+                            failures.push(Status::warning(msg));
                         }
                     }
                     let msg = format!("Failed to download blocklist from: {}", e);
                     error!("{msg}");
-                    status.write().await.blocklist.error(msg);
+                    failures.push(Status::error(msg));
                 }
             }
         }
@@ -105,10 +104,9 @@ where
         match BlocklistRanges::load(&config.custom_blocklist).await {
             Ok(ranges) => merged.merge(ranges),
             Err(e) => {
-                ok = false;
                 let msg = format!("Failed to load custom blocklist ranges: {}", e);
                 error!("{msg}");
-                status.write().await.blocklist.warning(msg);
+                failures.push(Status::warning(msg));
             }
         };
 
@@ -119,7 +117,8 @@ where
                 let msg = format!("Failed to load custom allowlist ranges: {}", e);
                 error!("{msg}");
                 warn!("returning blocklist without allowlist");
-                status.write().await.blocklist.warning(msg);
+                failures.push(Status::warning(msg));
+                store_worst_status(status, failures).await;
                 return merged.deduplicate();
             }
         };
@@ -149,13 +148,7 @@ where
             ipv4: ipv4_blocklist,
             ipv6: ipv6_blocklist,
         };
-        if ok {
-            status
-                .write()
-                .await
-                .blocklist
-                .ok("Blocklist loaded successfully");
-        }
+        store_worst_status(status, failures).await;
         result.deduplicate()
     }
 
