@@ -16,7 +16,7 @@ use axum::{Router, http};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use ipnet::{Ipv4Net, Ipv6Net};
-use log::{debug, info};
+use log::{debug, error, info};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -77,14 +77,11 @@ impl AppState {
             status.geo = ComponentStatus::new(next_iplist_run);
             status.blocklist = ComponentStatus::new(next_blocklist_run);
         }
-
-        let blocklist_ranges =
-            BlocklistRanges::merged_blocklist_ranges(&config.blocklist, &status).await;
         Ok(Arc::new(Self {
             config,
             status,
             ip_lists: IpLists::default(),
-            blocklist: RwLock::new(blocklist_ranges),
+            blocklist: RwLock::new(BlocklistRanges::default()),
             schedules,
         }))
     }
@@ -163,8 +160,6 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         .init();
 
     let state: Arc<AppState> = AppState::new(config.clone()).await?;
-    update_ranges::<MaxMindParser>(state.clone()).await;
-    schedule_tasks(state.clone(), &config).await?;
 
     let api_routes = Router::new()
         .route("/iplist/country", get(get_all_countries))
@@ -184,7 +179,7 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         .nest("/api", api_routes)
         .nest_service("/static", ServeDir::new("static"))
         .layer(middleware::from_fn(access_log))
-        .with_state(state);
+        .with_state(state.clone());
 
     let tls_config = if let (Some(cert), Some(key)) =
         (config.tls_cert_path.as_ref(), config.tls_key_path.as_ref())
@@ -194,24 +189,36 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         None
     };
     let hostnames = lookup_hosts(&config.hostnames).await?;
+    let mut handles = Vec::new();
     for hostname in hostnames {
-        if let Some(ref tls) = tls_config {
-            info!("listening with TLS on {}", hostname);
-            axum_server::bind_rustls(hostname, tls.clone())
-                .serve(
-                    app.clone()
-                        .into_make_service_with_connect_info::<SocketAddr>(),
-                )
-                .await?;
-        } else {
-            info!("listening on {}", hostname);
-            axum_server::bind(hostname)
-                .serve(
-                    app.clone()
-                        .into_make_service_with_connect_info::<SocketAddr>(),
-                )
-                .await?;
-        }
+        let app_clone = app.clone();
+        let tls_config_clone = tls_config.clone();
+        handles.push(tokio::task::spawn(async move {
+            if let Some(ref tls) = tls_config_clone {
+                info!("listening with TLS on {}", hostname);
+                if let Err(e) = axum_server::bind_rustls(hostname, tls.clone())
+                    .serve(app_clone.into_make_service_with_connect_info::<SocketAddr>())
+                    .await
+                {
+                    error!("failed to listen with TLS on {}: {}", hostname, e);
+                }
+            } else {
+                info!("listening on {}", hostname);
+                if let Err(e) = axum_server::bind(hostname)
+                    .serve(app_clone.into_make_service_with_connect_info::<SocketAddr>())
+                    .await
+                {
+                    error!("failed to listen on {}: {}", hostname, e);
+                }
+            }
+        }));
+    }
+
+    update_blocklist(state.clone()).await?;
+    update_ranges::<MaxMindParser>(state.clone()).await;
+    schedule_tasks(state.clone(), &config).await?;
+    for handle in handles {
+        let _ = handle.await;
     }
 
     Ok(())
@@ -270,5 +277,13 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
         .await?;
 
     scheduler.start().await?;
+    Ok(())
+}
+
+async fn update_blocklist(state: Arc<AppState>) -> Result<(), AppError> {
+    let blocklist =
+        BlocklistRanges::merged_blocklist_ranges(&state.config.blocklist, &state.status).await;
+    *state.blocklist.write().await = blocklist;
+    info!("blocklist updated");
     Ok(())
 }
