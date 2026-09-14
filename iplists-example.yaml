@@ -21,6 +21,9 @@ iplist:
       # password:
 blocklist:
   cron: "* * * * * *"
+  # default false. Empty blocklist will replace existing blocklist.
+  # Set to true to log error if the blocklist is empty and NOT replace existing blocklist.
+  error_on_empty: false
   custom_blocklist:
     ipv4_folder: lists/custom/blocklist/ipv4
     ipv6_folder: lists/custom/blocklist/ipv6

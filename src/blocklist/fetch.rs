@@ -160,18 +160,8 @@ where
     }
 
     pub async fn download(config: &UrlBlocklist) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
-        let ipv4 = if let Some(url) = &config.ipv4_url {
-            let ips = fetch_blocklist(config, url).await?;
-            validate_subnets(&ips, None)
-        } else {
-            Vec::new()
-        };
-        let ipv6 = if let Some(url) = &config.ipv6_url {
-            let ips = fetch_blocklist(config, url).await?;
-            validate_subnets(&ips, None)
-        } else {
-            Vec::new()
-        };
+        let ipv4 = download_urls(config, config.ipv4_url.as_ref()).await?;
+        let ipv6 = download_urls(config, config.ipv6_url.as_ref()).await?;
 
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
@@ -212,6 +202,29 @@ async fn load_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
     Ok(ranges)
 }
 
+async fn download_urls<T: BlockListNet>(
+    config: &UrlBlocklist,
+    url: Option<&String>,
+) -> Result<Vec<T>, AppError> {
+    let Some(url) = url else {
+        return Ok(Vec::new());
+    };
+
+    let ips = fetch_blocklist(config, url).await?;
+
+    let log_format = format!("URL Blocklist: {}", config.name);
+    let err = AppError::EmptyList(log_format.clone());
+    let validated = validate_subnets::<T>(&ips, Some(log_format.as_str()));
+    match (config.error_on_empty, validated.is_empty()) {
+        (true, true) => Err(err),
+        (false, true) => {
+            warn!("{err}");
+            Ok(Vec::new())
+        }
+        _ => Ok(validated),
+    }
+}
+
 pub async fn load_custom_lists<T: BlockListNet>(
     folder: &str,
     split: Option<&str>,
@@ -244,7 +257,7 @@ async fn read_file<T: BlockListNet>(f: DirEntry, split: Option<&str>) -> Result<
     let parsed = parse_from_string::<&str>(content.as_str(), split);
     let validated = validate_subnets::<T>(
         &parsed,
-        Some(format!("custom ranges: file {}", f.path().display()).as_mut_str()),
+        Some(format!("custom ranges: file {}", f.path().display()).as_str()),
     );
 
     Ok(validated)
@@ -258,11 +271,11 @@ pub fn validate_subnets<T: BlockListNet>(ips: &[String], log: Option<&str>) -> V
                 if parsed_ip.is_net() {
                     parsed.push(parsed_ip);
                 } else {
-                    warn!("{}:invalid ip: {ip}; not a network", log.unwrap_or(""));
+                    warn!("{}: invalid ip: {ip}; not a network", log.unwrap_or(""));
                 }
             }
             Err(e) => {
-                warn!("{}:ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
+                warn!("{}: ip could not be parsed: {ip}; {e}", log.unwrap_or(""));
             }
         }
     }

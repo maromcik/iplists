@@ -55,6 +55,8 @@ pub enum AppError {
     SerdeError(String),
     #[error("IP List could not be loaded: {0}")]
     ListLoadError(String),
+    #[error("Empty list parsed: {0}")]
+    EmptyList(String),
 }
 
 impl Debug for AppError {

@@ -16,7 +16,7 @@ fn bare_address(val: &str) -> &str {
     }
 }
 
-pub fn real_ip_remote_addr<'a>(req: &'a Request<impl Sized>) -> Option<&'a str> {
+pub fn real_ip_remote_addr(req: &Request<impl Sized>) -> Option<&str> {
     req.headers()
         .get_all(http::header::FORWARDED)
         .into_iter()

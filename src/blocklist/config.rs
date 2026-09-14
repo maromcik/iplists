@@ -23,6 +23,7 @@ pub struct CustomListConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UrlBlocklist {
+    pub name: String,
     #[serde(default)]
     pub ipv4_url: Option<String>,
     #[serde(default)]
@@ -34,4 +35,6 @@ pub struct UrlBlocklist {
     #[serde(default)]
     pub split_string: Option<String>,
     pub backup_path: String,
+    #[serde(default)]
+    pub error_on_empty: bool,
 }
