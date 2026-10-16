@@ -9,13 +9,21 @@ use log::error;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// In-memory store of all geo-IP indexes, shared by the HTTP handlers.
+///
+/// Rebuilt wholesale on every iplist refresh (see [`update_ranges`]); each
+/// field is a [`RwLock`] around a complete index snapshot.
 #[derive(Default)]
 pub struct IpLists {
+    /// Networks indexed by country/continent plus per-IP lookup tries.
     pub location_ranges: RwLock<IpLocationRanges>,
+    /// Networks indexed by ASN plus per-IP lookup tries.
     pub asn_ranges: RwLock<IpAsnRanges>,
 }
 
 impl IpLists {
+    /// Returns all networks registered for a continent name
+    /// (e.g. `"Europe"`), or `404 NotFound` if unknown.
     pub async fn get_by_continent(
         &self,
         continent: &str,
@@ -35,6 +43,8 @@ impl IpLists {
         }
     }
 
+    /// Returns all networks registered for an ISO-3166 alpha-2 country code
+    /// (e.g. `"DE"`), or `404 NotFound` if unknown.
     pub async fn get_by_country(
         &self,
         country_alpha2: &str,
@@ -54,6 +64,8 @@ impl IpLists {
         }
     }
 
+    /// Returns all networks announced by an autonomous system number,
+    /// or `404 NotFound` if unknown.
     pub async fn get_by_asn(&self, asn: &u32) -> Result<Arc<IpAsnRangeByIp>, AppError> {
         match self.asn_ranges.read().await.by_asn.get(asn) {
             Some(ranges) => Ok(ranges.clone()),
@@ -65,6 +77,12 @@ impl IpLists {
     }
 }
 
+/// Downloads (or loads from the local cache) the location table and the
+/// location-to-network mapping using the provider parser `P`.
+///
+/// Locations with an empty country code (anonymous/unknown entries) are
+/// dropped and the remainder is sorted by code to keep downstream output
+/// deterministic.
 pub async fn load_locations<P>(
     config: &IplistConfig,
 ) -> Result<(Vec<Location>, Vec<IpLocationRange>), AppError>
@@ -83,6 +101,16 @@ where
         .map_err(|e| AppError::ListLoadError(format!("Failed to load countries: {e}")))?;
     Ok((locations, location_ranges))
 }
+/// Rebuilds the location and ASN indexes from the provider data and swaps
+/// them into the shared [`AppState`].
+///
+/// Errors never take old data down: each half (locations / ASNs) is
+/// independent, and failures only downgrade the relevant
+/// [`crate::status::ComponentStatus`]. The aggregate `geo` status is `ok`
+/// only when both halves succeeded.
+///
+/// The location index is also persisted to disk (per-country and
+/// per-continent files) via [`IpLocationRanges::save`].
 pub async fn update_ranges<P>(state: Arc<AppState>)
 where
     P: LocationParser + AsnParser,

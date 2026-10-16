@@ -13,6 +13,8 @@ use itertools::Itertools;
 use std::net::IpAddr;
 use std::sync::Arc;
 
+/// `GET /api/iplist/country` — returns the full location table
+/// (countries with their codes and continents) as JSON.
 pub async fn get_all_countries(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -26,6 +28,8 @@ pub async fn get_all_countries(
     Ok(Json(countries))
 }
 
+/// `GET /api/iplist/continent` — returns the distinct continent names
+/// present in the location table, as a JSON array of strings.
 pub async fn get_all_continents(
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -43,6 +47,10 @@ pub async fn get_all_continents(
     Ok(Json(continents))
 }
 
+/// Picks the requested IP family from a location range set.
+///
+/// `None` merges both families (v4 first) — the common case for callers
+/// that want "all networks of this country".
 fn get_ips_by_version(
     ips: Arc<IpLocationRangeByIp>,
     form: &IpListFormByCountry,
@@ -59,6 +67,11 @@ fn get_ips_by_version(
     }
 }
 
+/// `GET /api/iplist/location?[country=XX|continent=NAME][&version=ipv4|ipv6][&format=...]`
+///
+/// With neither `country` nor `continent`, returns every known network.
+/// The response body is produced by [`OutputFormat::format`](crate::iplist::formatter::OutputFormat::format),
+/// so the same endpoint serves JSON, plain text or nftables output.
 pub async fn get_by_location(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<IpListFormByCountry>,
@@ -91,6 +104,10 @@ pub async fn get_by_location(
     Ok(formatted)
 }
 
+/// `GET /api/iplist/asn?[asn=13335][&version=ipv4|ipv6][&format=...]`
+///
+/// With no `asn`, returns all known ASN ranges. The nftables set name is
+/// derived from the ASN (`asn13335`) when one is requested.
 pub async fn get_by_asn(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<IpListFormByAsn>,
@@ -123,6 +140,11 @@ pub async fn get_by_asn(
     Ok(formatted)
 }
 
+/// `GET /api/iplist/geo?ip=1.2.3.4`
+///
+/// Point lookup: resolves a single IP address against the location and ASN
+/// longest-prefix-match tries and returns a combined JSON view. Whichever
+/// side misses is filled with defaults; 404 only if both miss.
 pub async fn geo_location(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<ApiGeoLocation>,

@@ -1,3 +1,7 @@
+//! Blocklist aggregation: downloads remote IP blocklists, merges them
+//! with local custom lists, subtracts the allowlist and deduplicates the
+//! result into the compact set of networks served by `/api/blocklist`.
+
 use crate::blocklist::config::{BlocklistConfig, CustomListConfig, UrlBlocklist};
 use crate::error::AppError;
 use crate::iptools::iptrie::{build, deduplicate};
@@ -11,6 +15,12 @@ use std::str::FromStr;
 use tokio::fs::DirEntry;
 use tokio::sync::RwLock;
 
+/// Everything a network type must provide to participate in the blocklist
+/// pipeline: parseable from text, displayable for logs, splittable for
+/// allowlist subtraction, and JSON-serializable for the disk backup.
+///
+/// Blanket-implemented, so `Ipv4Net`, `Ipv6Net`, `IpNet`, etc. qualify
+/// automatically.
 pub trait BlockListNet:
     ListNetwork
     + FromStr<Err: Display>
@@ -31,6 +41,11 @@ impl<T> BlockListNet for T where
 {
 }
 
+/// A pair of network lists, one per IP family.
+///
+/// Generic over family-specific concrete types (`Ipv4Net`/`Ipv6Net` in the
+/// app) so arithmetic keeps family guarantees; the handler converts to
+/// `IpNet` only when both families must go out in one response.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlocklistRanges<Ipv4, Ipv6> {
     pub ipv4: Vec<Ipv4>,
@@ -55,6 +70,8 @@ where
     Ipv4: BlockListNet,
     Ipv6: BlockListNet,
 {
+    /// Collapses overlapping/duplicate entries into the broadest set of
+    /// networks using a prefix trie (e.g. a `/16` absorbs shorter `/24`s).
     pub fn deduplicate(self) -> BlocklistRanges<Ipv4, Ipv6> {
         BlocklistRanges {
             ipv4: deduplicate(self.ipv4),
@@ -62,6 +79,20 @@ where
         }
     }
 
+    /// Builds the complete merged blocklist for one refresh run.
+    ///
+    /// Per source, in order:
+    /// 1. every remote list is downloaded (a failure falls back to that
+    ///    list's on-disk backup JSON; both failing is recorded),
+    /// 2. the custom block lists are loaded from disk and merged in,
+    /// 3. the allowlist tries are built and each merged network is
+    ///    *subtracted* against them (split only as deeply as needed),
+    /// 4. the result is deduplicated.
+    ///
+    /// Missing allowlists abort the subtraction but still return the
+    /// merged set, so a broken allowlist never blocks the pipeline. The
+    /// worst failure of the run is stored in the `blocklist` component
+    /// status.
     pub async fn merged_blocklist_ranges(
         config: &BlocklistConfig,
         status: &RwLock<AppStatus>,
@@ -152,6 +183,8 @@ where
         result.deduplicate()
     }
 
+    /// Downloads one remote list source. Either of `ipv4_url`/`ipv6_url`
+    /// may be absent (treated as an empty family).
     pub async fn download(config: &UrlBlocklist) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
         let ipv4 = download_urls(config, config.ipv4_url.as_ref()).await?;
         let ipv6 = download_urls(config, config.ipv6_url.as_ref()).await?;
@@ -159,6 +192,9 @@ where
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
+    /// Loads every file under the custom list's v4/v6 folders. Files that
+    /// fail to parse are skipped with a warning rather than failing the
+    /// whole load.
     pub async fn load(config: &CustomListConfig) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
         let ipv4 = load_custom_lists(&config.ipv4_folder, config.split_string.as_deref()).await?;
         let ipv6 = load_custom_lists(&config.ipv6_folder, config.split_string.as_deref()).await?;
@@ -166,12 +202,16 @@ where
         Ok(BlocklistRanges { ipv4, ipv6 })
     }
 
+    /// Appends another set of ranges; overlaps are resolved later by
+    /// [`BlocklistRanges::deduplicate`].
     pub fn merge(&mut self, other: BlocklistRanges<Ipv4, Ipv6>) {
         self.ipv4.extend(other.ipv4);
         self.ipv6.extend(other.ipv6);
     }
 }
 
+/// Persists a downloaded list as JSON under `backup_path`, used as the
+/// fallback when the next fetch fails.
 async fn save_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
     ranges: &BlocklistRanges<Ipv4, Ipv6>,
     path: &str,
@@ -187,6 +227,7 @@ async fn save_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
     Ok(())
 }
 
+/// Reads back a list previously written by [`save_blocklist`].
 async fn load_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
     path: &str,
 ) -> Result<BlocklistRanges<Ipv4, Ipv6>, AppError> {
@@ -195,6 +236,9 @@ async fn load_blocklist<Ipv4: BlockListNet, Ipv6: BlockListNet>(
     Ok(ranges)
 }
 
+/// Downloads and validates a single URL. A set with no valid networks
+/// becomes an error only when `error_on_empty` is configured; otherwise it
+/// is warned about and treated as empty.
 async fn download_urls<T: BlockListNet>(
     config: &UrlBlocklist,
     url: Option<&String>,
@@ -218,6 +262,8 @@ async fn download_urls<T: BlockListNet>(
     }
 }
 
+/// Parses every file in `folder` as a whitespace- (or custom-delimiter-)
+/// separated list of CIDRs, skipping unreadable/invalid files.
 pub async fn load_custom_lists<T: BlockListNet>(
     folder: &str,
     split: Option<&str>,
@@ -240,6 +286,7 @@ pub async fn load_custom_lists<T: BlockListNet>(
     Ok(ranges)
 }
 
+/// Parses a single custom-list file.
 async fn read_file<T: BlockListNet>(f: DirEntry, split: Option<&str>) -> Result<Vec<T>, AppError> {
     let content = tokio::fs::read_to_string(f.path()).await.map_err(|e| {
         AppError::FileError(format!(
@@ -256,6 +303,10 @@ async fn read_file<T: BlockListNet>(f: DirEntry, split: Option<&str>) -> Result<
     Ok(validated)
 }
 
+/// Parses raw strings into network values, keeping only entries that are
+/// actual networks (address equals the network base, e.g. `10.0.0.0/8`) —
+/// host-bits-set inputs are rejected with a warning so a sloppy source
+/// cannot silently mean the wrong range.
 pub fn validate_subnets<T: BlockListNet>(ips: &[String], log: Option<&str>) -> Vec<T> {
     let mut parsed = Vec::new();
     for ip in ips {
@@ -276,6 +327,8 @@ pub fn validate_subnets<T: BlockListNet>(ips: &[String], log: Option<&str>) -> V
     parsed
 }
 
+/// Splits a raw payload into candidate list entries: on the configured
+/// delimiter when set, otherwise on any whitespace.
 pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> Vec<String> {
     match split_string {
         None => data
@@ -291,6 +344,8 @@ pub fn parse_from_string<S: AsRef<str>>(data: S, split_string: Option<&str>) -> 
     }
 }
 
+/// Fetches the remote list as plain text (custom headers supported) and
+/// splits it into strings. Parsing/validation is left to the caller.
 async fn fetch_blocklist(config: &UrlBlocklist, endpoint: &str) -> Result<Vec<String>, AppError> {
     let client = reqwest::Client::builder().timeout(config.timeout).build()?;
 

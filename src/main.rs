@@ -43,6 +43,11 @@ pub mod models;
 pub mod status;
 pub mod utils;
 
+/// Command-line interface for the server.
+///
+/// The only supported argument is the path to the configuration file
+/// (`-c`/`--config`), which defaults to `iplists.yaml`.
+
 #[derive(Debug, Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -56,15 +61,28 @@ struct Cli {
     config: String,
 }
 
+/// Shared application state handed to every HTTP handler.
+///
+/// All mutable fields are behind an [`RwLock`]: the background cron jobs
+/// replace the lists while readers hold short-lived read guards. Lists are
+/// swapped wholesale (`*lock.write().await = new_value`), never mutated in
+/// place, so readers always see a consistent snapshot.
 pub struct AppState {
+    /// Static configuration parsed at startup.
     pub config: AppConfig,
+    /// Health/refresh status of each component, exposed via `/api/status`.
     pub status: RwLock<AppStatus>,
+    /// In-memory geo/ASN IP ranges (country, continent, ASN indexes + lookup tries).
     pub ip_lists: IpLists,
+    /// Merged, deduplicated and allowlist-subtracted blocklist networks.
     pub blocklist: RwLock<BlocklistRanges<Ipv4Net, Ipv6Net>>,
+    /// Parsed cron expressions used to compute next scheduled refresh times.
     pub schedules: Schedule,
 }
 
 impl AppState {
+    /// Builds the initial state: empty lists and per-component statuses
+    /// showing the first scheduled run of each cron job.
     pub async fn new(config: AppConfig) -> Result<Arc<Self>, AppError> {
         let schedules = Schedule::new(&config.blocklist.cron, &config.iplist.cron)?;
         let status = RwLock::new(AppStatus::default());
@@ -91,6 +109,8 @@ fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
     let config = AppConfig::parse_config(&cli.config)?;
 
+    // One tokio worker per available CPU core, unless overridden in config.
+
     let worker_threads = config.workers.unwrap_or_else(|| {
         std::thread::available_parallelism()
             .map(std::num::NonZero::get)
@@ -105,6 +125,9 @@ fn main() -> Result<(), AppError> {
         .block_on(run(config))
 }
 
+/// Access-log middleware: emits one `tracing::info!` line per request in a
+/// combined-Apache-like format, including the real client IP (from the
+/// `Forwarded`/`X-Forwarded-For` headers), status code and request duration.
 async fn access_log(req: Request, next: Next) -> Response {
     let start = Instant::now();
 
@@ -144,6 +167,20 @@ async fn access_log(req: Request, next: Next) -> Response {
     response
 }
 
+/// Application entry point: initializes tracing, builds the router, performs
+/// the initial data loads, registers the cron jobs and binds the HTTP(S)
+/// listeners.
+///
+/// ## Routing layout
+/// * `/api/iplist/country`, `/api/iplist/continent`, `/api/iplist/location`,
+///   `/api/iplist/asn`, `/api/iplist/geo`, `/api/blocklist`, `/api/status`
+///   — the data API.
+/// * `/lists/*` — the generated per-country/continent list files on disk.
+/// * `/static/*` — static assets; everything else falls back to the SPA
+///   bundled in `./frontend/dist`.
+///
+/// Each hostname is resolved and served on its own task, with TLS enabled
+/// when both `tls_cert_path` and `tls_key_path` are configured.
 async fn run(config: AppConfig) -> Result<(), AppError> {
     let env = EnvFilter::new(
         format!("iplists={},{}", config.app_log_level, config.all_log_level).as_str(),
@@ -214,6 +251,8 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
         }));
     }
 
+    // Guarantee the in-memory lists are populated before any request can be
+    // served, then start the recurring refresh jobs.
     update_blocklist(state.clone()).await?;
     update_ranges::<MaxMindParser>(state.clone()).await;
     schedule_tasks(state.clone(), &config).await?;
@@ -224,6 +263,8 @@ async fn run(config: AppConfig) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Resolves every configured hostname (which may contain `host:port` DNS
+/// names) into concrete socket addresses to bind to.
 async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>, AppError> {
     let mut hostnames = Vec::default();
     for hostname in hostname_set {
@@ -232,6 +273,16 @@ async fn lookup_hosts(hostname_set: &HashSet<String>) -> Result<Vec<SocketAddr>,
     Ok(hostnames)
 }
 
+/// Registers the two recurring maintenance jobs with a
+/// [`tokio_cron_scheduler`]:
+///
+/// 1. **iplist job** (`iplist.cron`) — re-downloads/re-parses the geo-IP
+///    archives and rebuilds the in-memory location/ASN indexes.
+/// 2. **blocklist job** (`blocklist.cron`) — re-fetches all URL/custom
+///    blocklists, applies the allowlist and rebuilds the merged blocklist.
+///
+/// After each run the corresponding component statuses and next-run
+/// timestamps are refreshed so `/api/status` stays accurate.
 async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), AppError> {
     let scheduler = JobScheduler::new().await?;
     let state_local = state.clone();
@@ -280,6 +331,8 @@ async fn schedule_tasks(state: Arc<AppState>, config: &AppConfig) -> Result<(), 
     Ok(())
 }
 
+/// Performs an initial blocklist build at startup so the first request
+/// never sees an empty list.
 async fn update_blocklist(state: Arc<AppState>) -> Result<(), AppError> {
     let blocklist =
         BlocklistRanges::merged_blocklist_ranges(&state.config.blocklist, &state.status).await;

@@ -5,6 +5,8 @@ fn unquote(val: &str) -> &str {
     val.trim().trim_start_matches('"').trim_end_matches('"')
 }
 
+/// Strips the port (and IPv6 brackets) from a `Forwarded`-header `for=`
+/// value, returning just the address.
 fn bare_address(val: &str) -> &str {
     if val.starts_with('[') {
         val.split("]:")
@@ -16,6 +18,13 @@ fn bare_address(val: &str) -> &str {
     }
 }
 
+/// Extracts the original client address from a request hitting a reverse
+/// proxy.
+///
+/// Prefers the RFC 7239 `Forwarded` header (first `for=` directive);
+/// falls back to the first address of `X-Forwarded-For`. Returns `None`
+/// when neither is present/parseable, in which case the socket-level
+/// `ConnectInfo` is used by the caller.
 pub fn real_ip_remote_addr(req: &Request<impl Sized>) -> Option<&str> {
     req.headers()
         .get_all(http::header::FORWARDED)

@@ -8,6 +8,11 @@ use axum::response::IntoResponse;
 use ipnet::IpNet;
 use std::sync::Arc;
 
+/// `GET /api/blocklist?[version=ipv4|ipv6][&format=...]`
+///
+/// Serves the merged, allowlist-filtered blocklist. With no `version`, IPv4
+/// and IPv6 networks are wrapped into a single vector as `IpNet` so both
+/// families appear in one response. The nftables set name is `blocklist`.
 pub async fn get_blocklist(
     State(state): State<Arc<AppState>>,
     AppQuery(form): AppQuery<BlocklistIpVersion>,

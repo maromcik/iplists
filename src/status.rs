@@ -11,6 +11,8 @@ fn now_local() -> OffsetDateTime {
     OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc())
 }
 
+/// Severity levels for component health, ordered so `max` picks the worst.
+/// Serialized as its integer value in the status API.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StatusCode {
     #[default]
@@ -51,6 +53,10 @@ impl<'de> Deserialize<'de> for StatusCode {
     }
 }
 
+/// A status snapshot: severity plus a human-readable message.
+///
+/// `PartialEq`/`Ord` compare by severity only (not by message), which lets
+/// runs pick the *worst* of several failures generically.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Status {
     pub status_code: StatusCode,
@@ -114,6 +120,8 @@ impl Status {
     }
 }
 
+/// Tracks when a component was last refreshed and when the next
+/// refresh is scheduled, both in RFC 3339 timestamps.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateStatus {
     #[serde(with = "time::serde::rfc3339::option")]
@@ -136,6 +144,8 @@ impl UpdateStatus {
     }
 }
 
+/// Health of one sub-system (locations, ASNs, geo index, blocklist):
+/// a current [`Status`] plus its refresh timestamps.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentStatus {
     pub status: Status,
@@ -172,6 +182,11 @@ impl ComponentStatus {
     }
 }
 
+/// Aggregate server health, served by `GET /api/status`.
+///
+/// `overall` is computed on demand from the worst component status
+/// (see [`AppStatus::worst`]); the other fields describe each data
+/// pipeline individually.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppStatus {
     pub overall: Status,
@@ -198,6 +213,8 @@ impl AppStatus {
         .unwrap_or_default()
     }
 
+    /// Marks every iplist-related component as failed (used for
+    /// catastrophic shared errors).
     pub fn iplist_error(&mut self, message: &str) {
         self.locations.error(message);
         self.asns.error(message);
@@ -205,6 +222,7 @@ impl AppStatus {
         self.blocklist.error(message);
     }
 
+    /// Marks every iplist-related component as healthy.
     pub fn iplist_ok(&mut self, message: &str) {
         self.locations.ok(message);
         self.asns.ok(message);
@@ -225,6 +243,8 @@ impl Default for AppStatus {
     }
 }
 
+/// Parsed cron schedules for both refresh jobs, used to report the
+/// next planned run times in `/api/status`.
 pub struct Schedule {
     pub blocklist_cron: Cron,
     pub iplist_cron: Cron,
@@ -238,6 +258,8 @@ impl Schedule {
         })
     }
 
+    /// Parses a cron expression with **required seconds** (6 fields),
+    /// e.g. `"0 0 * * * *"` runs at the top of every hour.
     pub fn build(cron: &str) -> Result<Cron, AppError> {
         let schedule = croner::parser::CronParser::builder()
             .seconds(croner::parser::Seconds::Required)
@@ -256,6 +278,7 @@ impl Schedule {
         Self::next_run(&self.iplist_cron)
     }
 
+    /// Computes the next occurrence in the local timezone.
     fn next_run(cron: &Cron) -> Option<OffsetDateTime> {
         let next = cron
             .find_next_occurrence(&chrono::Local::now(), false)
@@ -266,6 +289,8 @@ impl Schedule {
     }
 }
 
+/// Reduces a batch of per-source failures to a single blocklist status:
+/// the worst failure wins; an empty batch means success.
 pub async fn store_worst_status(status: &RwLock<AppStatus>, failures: Vec<Status>) {
     match failures.into_iter().reduce(|worst, next| worst.max(next)) {
         Some(worst) => status.write().await.blocklist.set(worst),

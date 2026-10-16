@@ -9,12 +9,19 @@ use std::num::ParseIntError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
+/// JSON body returned to clients when a handler fails.
 #[derive(Serialize)]
 pub struct GenericError {
     pub code: u16,
     pub error: AppError,
 }
 
+/// Single error type used across the whole application.
+///
+/// Every fallible subsystem (`reqwest`, serde, zip, csv, the config crate,
+/// the scheduler, IP parsing, …) is mapped onto a variant via `From`
+/// implementations, so `?` works everywhere. Handlers return it directly:
+/// the [`IntoResponse`] implementation maps variants to HTTP status codes.
 #[derive(Error, Clone, Serialize)]
 pub enum AppError {
     #[error("Internal server error: {0}")]
@@ -173,6 +180,10 @@ impl From<ipnet::PrefixLenError> for AppError {
 }
 
 impl IntoResponse for AppError {
+    /// Renders the error as a JSON [`GenericError`] body. `BadRequest` /
+    /// `ParseError` map to 400, `NotFound` to 404 and `Unauthorized` to 401;
+    /// everything else is a 500 and should be treated as a server bug or an
+    /// upstream failure.
     fn into_response(self) -> Response {
         let status_code = match self {
             AppError::BadRequest(_) | AppError::ParseError(_) => StatusCode::BAD_REQUEST,

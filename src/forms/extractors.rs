@@ -1,3 +1,7 @@
+//! Custom axum extractors that deserialize the same payloads as the stock
+//! `Json`/`Query`/`Form`/`Path` extractors, but convert rejections into the
+//! crate-wide [`AppError`] so API error responses stay uniform.
+
 use axum::{
     Form,
     extract::{FromRequest, FromRequestParts, Json, Path, Query, Request},
@@ -6,6 +10,7 @@ use axum::{
 
 use crate::error::AppError;
 
+/// JSON body extractor; deserialization errors surface as 400 `ParseError`.
 pub struct AppJson<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppJson<T>
@@ -23,6 +28,8 @@ where
     }
 }
 
+/// Query-string extractor; deserialization errors surface as 400 `ParseError`.
+/// This is the extractor all GET data endpoints use.
 pub struct AppQuery<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppQuery<T>
@@ -40,6 +47,7 @@ where
     }
 }
 
+/// `application/x-www-form-urlencoded` body extractor.
 pub struct AppForm<T>(pub T);
 
 impl<S, T> FromRequest<S> for AppForm<T>
@@ -57,6 +65,7 @@ where
     }
 }
 
+/// Path-parameter extractor.
 pub struct AppPath<T>(pub T);
 
 impl<S, T> FromRequestParts<S> for AppPath<T>

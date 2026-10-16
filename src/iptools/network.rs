@@ -24,6 +24,10 @@ pub trait ListNetwork: Clone + Debug {
     fn is_ipv6(&self) -> bool;
 }
 
+/// Splits a network into its two children (`/n` → two `/n+1`).
+///
+/// Used by the prefix trie to subtract allowlist networks from blocklist
+/// networks without enumerating single addresses.
 pub trait Splitable {
     type Output: ListNetwork;
     fn split(&self) -> Result<(Self::Output, Self::Output), AppError>;
@@ -373,6 +377,11 @@ where
     }
 }
 
+/// Summarizes the inclusive range `start..=end` into the minimal set of
+/// CIDR blocks covering exactly those addresses.
+///
+/// Note: the function is intentionally tolerant about inputs — addresses
+/// of different families produce an empty result instead of an error.
 #[allow(dead_code)]
 pub fn summarize_ranges<T>(start: T, end: T) -> Vec<T>
 where

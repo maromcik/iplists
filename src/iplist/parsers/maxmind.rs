@@ -1,3 +1,11 @@
+//! Parser for MaxMind **GeoLite2 CSV** archives (`GeoLite2-Country-CSV.zip`
+//! and `GeoLite2-ASN-CSV.zip`).
+//!
+//! [`MaxMindGeoData`] knows how to read individual CSVs out of the ZIP;
+//! [`MaxMindParser`] implements the provider traits ([`LocationParser`],
+//! [`AsnParser`]) that the refresh pipeline calls. Registration is
+//! described in the [parent module docs](crate::iplist::parsers).
+
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -29,6 +37,10 @@ const COUNTRY_BLOCKS_V6_CSV: &str = "GeoLite2-Country-Blocks-IPv6.csv";
 const ASN_BLOCKS_V4_CSV: &str = "GeoLite2-ASN-Blocks-IPv4.csv";
 const ASN_BLOCKS_V6_CSV: &str = "GeoLite2-ASN-Blocks-IPv6.csv";
 
+/// A downloaded GeoLite2 ZIP archive, ready for CSV extraction.
+///
+/// Implements [`GeoDataParser`]: the raw bytes may come either straight
+/// from the HTTP download or from the disk cache.
 pub struct MaxMindGeoData {
     pub body: Vec<u8>,
 }
@@ -38,6 +50,9 @@ impl GeoDataParser for MaxMindGeoData {
         Self { body }
     }
 
+    /// Finds a file whose name ends with `name` inside the ZIP (the
+    /// archives nest CSVs in versioned folders) and deserializes its CSV
+    /// rows as `T`.
     async fn parse<T: for<'de> Deserialize<'de>>(&self, name: &str) -> Result<Vec<T>, AppError> {
         let cursor = Cursor::new(&self.body);
         let mut archive = zip::ZipArchive::new(cursor)?;
@@ -71,8 +86,13 @@ impl GeoDataParser for MaxMindGeoData {
     }
 }
 
+/// Provider implementation of [`LocationParser`]/[`AsnParser`] backed by
+/// MaxMind GeoLite2 data.
 pub struct MaxMindParser;
 
+/// Returns the cached archive if it exists and is younger than
+/// `max_age`, otherwise downloads it (writing it back to the cache)
+/// before handing out the parser.
 async fn load_or_download(
     config: &IplistConfig,
     filename: &str,

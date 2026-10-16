@@ -5,6 +5,10 @@ use serde::Serialize;
 
 use crate::iplist::iprange::Location;
 
+/// JSON response of `GET /api/iplist/geo`: the queried address plus the
+/// containing network, its ASN/ISP and its geographic location.
+/// Missing pieces are zero-valued (e.g. unknown ASN is `0`, unknown
+/// location has empty strings).
 #[derive(Serialize, Debug, Clone)]
 pub struct CombinedIpRange {
     pub ip: IpAddr,
